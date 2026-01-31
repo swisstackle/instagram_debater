@@ -3,6 +3,9 @@ LLM client wrapper for OpenRouter API.
 Handles prompt generation and LLM API calls.
 """
 from typing import Dict, Any, Optional
+import os
+import re
+from openrouter import OpenRouter
 
 
 class LLMClient:
@@ -18,7 +21,11 @@ class LLMClient:
             max_tokens: Maximum tokens for response
             temperature: Temperature for response generation
         """
-        pass
+        self.api_key = api_key
+        self.model_name = model_name
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.client = OpenRouter(api_key=api_key)
     
     def generate_response(self, prompt: str) -> str:
         """
@@ -30,7 +37,16 @@ class LLMClient:
         Returns:
             Generated response text
         """
-        pass
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": "You are a debate assistant bot."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=self.max_tokens,
+            temperature=self.temperature
+        )
+        return response.choices[0].message.content
     
     def load_template(self, template_name: str) -> str:
         """
@@ -42,7 +58,13 @@ class LLMClient:
         Returns:
             Template content
         """
-        pass
+        # Get the templates directory relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        template_path = os.path.join(project_root, "templates", template_name)
+        
+        with open(template_path, 'r') as f:
+            return f.read()
     
     def fill_template(self, template: str, variables: Dict[str, Any]) -> str:
         """
@@ -55,7 +77,11 @@ class LLMClient:
         Returns:
             Filled template string
         """
-        pass
+        result = template
+        for key, value in variables.items():
+            placeholder = f"{{{{{key}}}}}"
+            result = result.replace(placeholder, str(value))
+        return result
     
     def check_post_topic_relevance(self, article_title: str, article_summary: str, post_caption: str) -> bool:
         """
@@ -69,7 +95,20 @@ class LLMClient:
         Returns:
             True if post is relevant to article topic
         """
-        pass
+        template = self.load_template("post_topic_check_prompt.txt")
+        prompt = self.fill_template(template, {
+            "ARTICLE_TITLE": article_title,
+            "ARTICLE_FIRST_PARAGRAPH": article_summary,
+            "POST_CAPTION": post_caption
+        })
+        
+        response = self.generate_response(prompt)
+        
+        # Parse response - looking for YES or NO
+        response_upper = response.upper()
+        if "YES" in response_upper[:10]:
+            return True
+        return False
     
     def check_comment_relevance(self, article_title: str, article_summary: str, comment_text: str) -> bool:
         """
@@ -83,4 +122,17 @@ class LLMClient:
         Returns:
             True if comment is relevant and debatable
         """
-        pass
+        template = self.load_template("comment_relevance_check_prompt.txt")
+        prompt = self.fill_template(template, {
+            "ARTICLE_TITLE": article_title,
+            "ARTICLE_FIRST_PARAGRAPH": article_summary,
+            "COMMENT_TEXT": comment_text
+        })
+        
+        response = self.generate_response(prompt)
+        
+        # Parse response - looking for YES or NO
+        response_upper = response.upper()
+        if "YES" in response_upper[:10]:
+            return True
+        return False

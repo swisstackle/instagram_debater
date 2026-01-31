@@ -5,10 +5,14 @@ Handles webhook verification, comment fetching, and reply posting.
 from typing import Dict, Any, List, Optional
 import hmac
 import hashlib
+import requests
 
 
 class InstagramAPI:
     """Wrapper for Instagram Graph API operations."""
+    
+    API_VERSION = "v18.0"
+    BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
     
     def __init__(self, access_token: str, app_secret: str):
         """
@@ -18,7 +22,8 @@ class InstagramAPI:
             access_token: Instagram access token
             app_secret: Instagram app secret for webhook verification
         """
-        pass
+        self.access_token = access_token
+        self.app_secret = app_secret
     
     def verify_webhook_signature(self, payload: bytes, signature_header: str) -> bool:
         """
@@ -31,7 +36,26 @@ class InstagramAPI:
         Returns:
             True if signature is valid
         """
-        pass
+        if not signature_header:
+            return False
+        
+        # Extract signature from header (format: "sha256=<signature>")
+        try:
+            method, signature = signature_header.split("=", 1)
+            if method != "sha256":
+                return False
+        except ValueError:
+            return False
+        
+        # Compute expected signature
+        expected_signature = hmac.new(
+            self.app_secret.encode('utf-8'),
+            payload,
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Compare signatures
+        return hmac.compare_digest(signature, expected_signature)
     
     def get_comment(self, comment_id: str) -> Dict[str, Any]:
         """
@@ -43,7 +67,15 @@ class InstagramAPI:
         Returns:
             Comment data dictionary
         """
-        pass
+        url = f"{self.BASE_URL}/{comment_id}"
+        params = {
+            "access_token": self.access_token,
+            "fields": "id,text,timestamp,from,media"
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
     
     def get_comment_replies(self, comment_id: str) -> List[Dict[str, Any]]:
         """
@@ -55,7 +87,15 @@ class InstagramAPI:
         Returns:
             List of reply comment dictionaries
         """
-        pass
+        url = f"{self.BASE_URL}/{comment_id}/replies"
+        params = {
+            "access_token": self.access_token
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("data", [])
     
     def get_post_caption(self, post_id: str) -> str:
         """
@@ -67,7 +107,16 @@ class InstagramAPI:
         Returns:
             Post caption text
         """
-        pass
+        url = f"{self.BASE_URL}/{post_id}"
+        params = {
+            "access_token": self.access_token,
+            "fields": "caption"
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("caption", "")
     
     def post_reply(self, comment_id: str, message: str) -> Dict[str, Any]:
         """
@@ -80,4 +129,12 @@ class InstagramAPI:
         Returns:
             Response data with new comment ID
         """
-        pass
+        url = f"{self.BASE_URL}/{comment_id}/replies"
+        params = {
+            "access_token": self.access_token,
+            "message": message
+        }
+        
+        response = requests.post(url, params=params)
+        response.raise_for_status()
+        return response.json()

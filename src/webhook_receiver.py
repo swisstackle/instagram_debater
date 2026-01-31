@@ -2,12 +2,23 @@
 Webhook receiver for Instagram comment notifications.
 Handles webhook verification and incoming comment data.
 """
-from fastapi import FastAPI, Request, Response, Query
+from fastapi import FastAPI, Request, Response, Query, HTTPException
 from typing import Dict, Any, Optional
 import json
+import os
+from datetime import datetime
 
 
 app = FastAPI()
+
+# Global webhook receiver instance (will be initialized with config)
+_webhook_receiver = None
+
+
+def init_webhook_receiver(verify_token: str, app_secret: str):
+    """Initialize the global webhook receiver instance."""
+    global _webhook_receiver
+    _webhook_receiver = WebhookReceiver(verify_token, app_secret)
 
 
 class WebhookReceiver:
@@ -21,7 +32,8 @@ class WebhookReceiver:
             verify_token: Token for webhook verification
             app_secret: App secret for signature verification
         """
-        pass
+        self.verify_token = verify_token
+        self.app_secret = app_secret
     
     def verify_challenge(self, mode: str, token: str, challenge: str) -> Optional[str]:
         """
@@ -35,7 +47,9 @@ class WebhookReceiver:
         Returns:
             Challenge string if valid, None otherwise
         """
-        pass
+        if mode == "subscribe" and token == self.verify_token:
+            return challenge
+        return None
     
     def process_webhook_payload(self, payload: Dict[str, Any]) -> None:
         """
@@ -44,7 +58,14 @@ class WebhookReceiver:
         Args:
             payload: Webhook payload dictionary
         """
-        pass
+        if payload.get("object") != "instagram":
+            return
+        
+        entries = payload.get("entry", [])
+        for entry in entries:
+            comment_data = self.extract_comment_data(entry)
+            if comment_data:
+                self.save_pending_comment(comment_data)
     
     def extract_comment_data(self, entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -56,7 +77,24 @@ class WebhookReceiver:
         Returns:
             Comment data dictionary or None
         """
-        pass
+        changes = entry.get("changes", [])
+        for change in changes:
+            if change.get("field") == "comments":
+                value = change.get("value", {})
+                
+                # Extract comment data
+                comment_data = {
+                    "comment_id": value.get("id"),
+                    "post_id": value.get("media", {}).get("id"),
+                    "username": value.get("from", {}).get("username"),
+                    "user_id": value.get("from", {}).get("id"),
+                    "text": value.get("text"),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "received_at": datetime.utcnow().isoformat() + "Z"
+                }
+                return comment_data
+        
+        return None
     
     def save_pending_comment(self, comment_data: Dict[str, Any]) -> None:
         """
@@ -65,7 +103,25 @@ class WebhookReceiver:
         Args:
             comment_data: Comment data to save
         """
-        pass
+        # Ensure state directory exists
+        state_dir = "state"
+        os.makedirs(state_dir, exist_ok=True)
+        
+        pending_file = os.path.join(state_dir, "pending_comments.json")
+        
+        # Load existing data
+        if os.path.exists(pending_file):
+            with open(pending_file, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {"version": "1.0", "comments": []}
+        
+        # Add new comment
+        data["comments"].append(comment_data)
+        
+        # Save back
+        with open(pending_file, 'w') as f:
+            json.dump(data, f, indent=2)
 
 
 @app.get("/webhook/instagram")
@@ -85,7 +141,14 @@ async def verify_webhook(
     Returns:
         Challenge string or 403 Forbidden
     """
-    pass
+    if _webhook_receiver is None:
+        raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
+    
+    challenge = _webhook_receiver.verify_challenge(hub_mode, hub_verify_token, hub_challenge)
+    if challenge:
+        return Response(content=challenge, media_type="text/plain")
+    else:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @app.post("/webhook/instagram")
@@ -99,4 +162,17 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     Returns:
         Success response
     """
-    pass
+    if _webhook_receiver is None:
+        raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
+    
+    # Get request body
+    body = await request.body()
+    payload = await request.json()
+    
+    # TODO: Verify signature here if needed
+    # signature = request.headers.get("X-Hub-Signature-256")
+    
+    # Process webhook payload
+    _webhook_receiver.process_webhook_payload(payload)
+    
+    return {"status": "ok"}

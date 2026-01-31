@@ -6,7 +6,11 @@ from fastapi.testclient import TestClient
 import json
 import hmac
 import hashlib
-from src.webhook_receiver import app, WebhookReceiver
+from src.webhook_receiver import app, WebhookReceiver, init_webhook_receiver
+
+
+# Initialize the webhook receiver for testing
+init_webhook_receiver("test_verify_token", "test_app_secret")
 
 
 class TestWebhookReceiver:
@@ -23,7 +27,9 @@ class TestWebhookReceiver:
     @pytest.fixture
     def client(self):
         """Create FastAPI test client."""
-        return TestClient(app)
+        # Use the correct TestClient initialization
+        from starlette.testclient import TestClient as StarletteTestClient
+        return StarletteTestClient(app)
     
     def test_webhook_receiver_initialization(self):
         """Test that WebhookReceiver initializes properly."""
@@ -113,7 +119,8 @@ class TestWebhookReceiver:
         
         comment_data = webhook_receiver.extract_comment_data(entry)
         assert comment_data is not None
-        assert comment_data["id"] == "comment-789" or "comment_id" in str(comment_data)
+        assert comment_data["comment_id"] == "comment-789"
+        assert comment_data["text"] == "Test comment text"
     
     def test_extract_comment_data_no_comments(self, webhook_receiver):
         """Test extracting comment data from entry with no comments."""
