@@ -1,0 +1,14 @@
+{
+  "name": "instagram-debater-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard for Instagram Debate Bot",
+  "scripts": {
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed",
+    "test:ui:debug": "playwright test --debug"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.1"
+  },
+  "dependencies": {}
+}

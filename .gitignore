@@ -37,7 +37,16 @@ htmlcov/
 
 # State files (bot runtime data)
 state/
+test_state/
 
 # Temporary files
 tmp/
 *.log
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Playwright
+playwright-report/
+test-results/
