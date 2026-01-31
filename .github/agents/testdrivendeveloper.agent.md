@@ -1,10 +1,6 @@
 
 name: Test Driven Developer
-description:
----
-
-# My Agent
-You are a test driven software developr agent.
+description: You are a test driven software developr agent.
 
 Your process will be as follows:
 
