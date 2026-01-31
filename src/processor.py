@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class CommentProcessor:
@@ -161,7 +161,7 @@ class CommentProcessor:
             "generated_response": response_text,
             "citations_used": citations,
             "status": "approved" if self.config.auto_post_enabled else "pending_review",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "validation_passed": True,
             "validation_errors": []
         }
@@ -246,7 +246,7 @@ class CommentProcessor:
             "username": comment.get("username"),
             "comment_text": comment.get("text"),
             "reason": reason,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         }
         
         # Append and save
@@ -278,7 +278,7 @@ class CommentProcessor:
                     
                     # Update entry
                     entry["posted"] = True
-                    entry["posted_at"] = datetime.utcnow().isoformat() + "Z"
+                    entry["posted_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                     
                     # Save posted ID
                     posted_file = os.path.join("state", "posted_ids.txt")

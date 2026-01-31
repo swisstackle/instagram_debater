@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, Response, Query, HTTPException
 from typing import Dict, Any, Optional
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 app = FastAPI()
@@ -89,8 +89,8 @@ class WebhookReceiver:
                     "username": value.get("from", {}).get("username"),
                     "user_id": value.get("from", {}).get("id"),
                     "text": value.get("text"),
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                    "received_at": datetime.utcnow().isoformat() + "Z"
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "received_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 }
                 return comment_data
         
