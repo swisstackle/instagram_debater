@@ -171,33 +171,6 @@ class TestWebhookReceiver:
                         assert saved_data["comments"][0]["comment_id"] == "123"
                         assert saved_data["comments"][0]["username"] == "testuser"
                         assert saved_data["comments"][0]["text"] == "Test comment"
-    #         "entry": [
-    #             {
-    #                 "id": "account-123",
-    #                 "time": 1704067200,
-    #                 "changes": [
-    #                     {
-    #                         "field": "comments",
-    #                         "value": {
-    #                             "from": {"id": "user-123", "username": "testuser"},
-    #                             "media": {"id": "media-456"},
-    #                             "id": "comment-789",
-    #                             "text": "Test"
-    #                         }
-    #                     }
-    #                 }
-    #             }
-    #         ]
-    #     }
-    #     
-    #     # Create INVALID signature
-    #     invalid_signature = "sha256=invalid_signature_here"
-    #     
-    #     response = client.post(
-    #         "/webhook/instagram",
-    #         json=payload,
-    #         headers={"X-Hub-Signature-256": invalid_signature}
-    #     )
     #     
     #     # Should reject with 403 Forbidden
     #     assert response.status_code == 403
