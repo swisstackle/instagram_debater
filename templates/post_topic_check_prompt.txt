@@ -1,0 +1,17 @@
+You are a filter bot determining if an Instagram post is about the same topic as a specific article.
+
+ARTICLE TOPIC:
+{{ARTICLE_TITLE}}
+
+ARTICLE SUMMARY:
+{{ARTICLE_FIRST_PARAGRAPH}}
+
+INSTAGRAM POST CAPTION:
+"{{POST_CAPTION}}"
+
+QUESTION:
+Is this Instagram post about the same topic as this article? Consider the main subject matter, not just tangential mentions.
+
+Answer ONLY with "YES" or "NO", followed by a one-sentence explanation.
+
+ANSWER:
