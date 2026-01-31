@@ -9,99 +9,108 @@ import os
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
-app = FastAPI()
 
-# ================== STATE MANAGEMENT ==================
-STATE_DIR = "state"
-
-def get_audit_log_path():
-    return os.path.join(STATE_DIR, "audit_log.json")
-
-def load_audit_log():
-    path = get_audit_log_path()
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
-    return {"version": "1.0", "entries": []}
-
-def save_audit_log(data):
-    os.makedirs(STATE_DIR, exist_ok=True)
-    path = get_audit_log_path()
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
-
-# ================== DASHBOARD API ==================
-@app.get("/api/responses")
-async def get_responses():
-    """Get all responses from audit log."""
-    audit_log = load_audit_log()
-    return {"responses": audit_log.get("entries", [])}
-
-@app.get("/api/responses/pending")
-async def get_pending_responses():
-    """Get pending responses only."""
-    audit_log = load_audit_log()
-    entries = audit_log.get("entries", [])
-    pending = [e for e in entries if e.get("status") == "pending_review"]
-    return {"responses": pending}
-
-@app.post("/api/responses/{response_id}/approve")
-async def approve_response(response_id: str):
-    """Approve a response."""
-    audit_log = load_audit_log()
-    entries = audit_log.get("entries", [])
+def create_dashboard_app(state_dir: str = "state") -> FastAPI:
+    """
+    Create a dashboard FastAPI application.
     
-    for entry in entries:
-        if entry.get("id") == response_id:
-            entry["status"] = "approved"
-            entry["approved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            save_audit_log(audit_log)
-            return {"status": "ok", "response_id": response_id}
+    Args:
+        state_dir: Directory to store state files (default: "state")
+        
+    Returns:
+        FastAPI application instance
+    """
+    app = FastAPI()
     
-    raise HTTPException(status_code=404, detail="Response not found")
+    # ================== STATE MANAGEMENT ==================
+    def get_audit_log_path():
+        return os.path.join(state_dir, "audit_log.json")
 
-@app.post("/api/responses/{response_id}/reject")
-async def reject_response(response_id: str, request: Request):
-    """Reject a response."""
-    data = await request.json()
-    reason = data.get("reason", "No reason provided")
-    
-    audit_log = load_audit_log()
-    entries = audit_log.get("entries", [])
-    
-    for entry in entries:
-        if entry.get("id") == response_id:
-            entry["status"] = "rejected"
-            entry["rejected_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            entry["rejection_reason"] = reason
-            save_audit_log(audit_log)
-            return {"status": "ok", "response_id": response_id}
-    
-    raise HTTPException(status_code=404, detail="Response not found")
+    def load_audit_log():
+        path = get_audit_log_path()
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return json.load(f)
+        return {"version": "1.0", "entries": []}
 
-@app.post("/api/responses/{response_id}/edit")
-async def edit_response(response_id: str, request: Request):
-    """Edit a response."""
-    data = await request.json()
-    new_text = data.get("text", "")
-    
-    audit_log = load_audit_log()
-    entries = audit_log.get("entries", [])
-    
-    for entry in entries:
-        if entry.get("id") == response_id:
-            entry["generated_response"] = new_text
-            entry["edited_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            save_audit_log(audit_log)
-            return {"status": "ok", "response_id": response_id}
-    
-    raise HTTPException(status_code=404, detail="Response not found")
+    def save_audit_log(data):
+        os.makedirs(state_dir, exist_ok=True)
+        path = get_audit_log_path()
+        with open(path, 'w') as f:
+            json.dump(data, f, indent=2)
 
-# ================== DASHBOARD UI ==================
-@app.get("/", response_class=HTMLResponse)
-async def dashboard_home():
-    """Dashboard home page."""
-    html_content = """
+    # ================== DASHBOARD API ==================
+    @app.get("/api/responses")
+    async def get_responses():
+        """Get all responses from audit log."""
+        audit_log = load_audit_log()
+        return {"responses": audit_log.get("entries", [])}
+
+    @app.get("/api/responses/pending")
+    async def get_pending_responses():
+        """Get pending responses only."""
+        audit_log = load_audit_log()
+        entries = audit_log.get("entries", [])
+        pending = [e for e in entries if e.get("status") == "pending_review"]
+        return {"responses": pending}
+
+    @app.post("/api/responses/{response_id}/approve")
+    async def approve_response(response_id: str):
+        """Approve a response."""
+        audit_log = load_audit_log()
+        entries = audit_log.get("entries", [])
+        
+        for entry in entries:
+            if entry.get("id") == response_id:
+                entry["status"] = "approved"
+                entry["approved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                save_audit_log(audit_log)
+                return {"status": "ok", "response_id": response_id}
+        
+        raise HTTPException(status_code=404, detail="Response not found")
+
+    @app.post("/api/responses/{response_id}/reject")
+    async def reject_response(response_id: str, request: Request):
+        """Reject a response."""
+        data = await request.json()
+        reason = data.get("reason", "No reason provided")
+        
+        audit_log = load_audit_log()
+        entries = audit_log.get("entries", [])
+        
+        for entry in entries:
+            if entry.get("id") == response_id:
+                entry["status"] = "rejected"
+                entry["rejected_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                entry["rejection_reason"] = reason
+                save_audit_log(audit_log)
+                return {"status": "ok", "response_id": response_id}
+        
+        raise HTTPException(status_code=404, detail="Response not found")
+
+    @app.post("/api/responses/{response_id}/edit")
+    async def edit_response(response_id: str, request: Request):
+        """Edit a response."""
+        data = await request.json()
+        new_text = data.get("text", "")
+        
+        audit_log = load_audit_log()
+        entries = audit_log.get("entries", [])
+        
+        for entry in entries:
+            if entry.get("id") == response_id:
+                entry["generated_response"] = new_text
+                entry["edited_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                save_audit_log(audit_log)
+                return {"status": "ok", "response_id": response_id}
+        
+        raise HTTPException(status_code=404, detail="Response not found")
+
+    # ================== DASHBOARD UI ==================
+    @app.get("/", response_class=HTMLResponse)
+    async def dashboard_home():
+        """Dashboard home page."""
+        html_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -576,7 +585,14 @@ async def dashboard_home():
 </body>
 </html>
     """
-    return HTMLResponse(content=html_content)
+        return HTMLResponse(content=html_content)
+    
+    return app
+
+
+# Create the default app instance for production use
+app = create_dashboard_app()
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -591,7 +607,7 @@ if __name__ == "__main__":
             sys.exit(1)
     
     print(f"Starting Instagram Debate Bot Dashboard on http://127.0.0.1:{port}")
-    print(f"State directory: {os.path.abspath(STATE_DIR)}")
+    print(f"State directory: {os.path.abspath('state')}")
     print(f"Press Ctrl+C to stop")
     
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
