@@ -110,9 +110,6 @@ class ResponseValidator:
         if length > 2200:
             errors.append(f"Response too long: {length} characters (max: 2200)")
         
-        # Note: Not enforcing minimum length as brief responses can be valid
-        # Removed minimum length check to allow concise responses
-        
         is_valid = len(errors) == 0
         return is_valid, errors
     

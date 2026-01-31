@@ -27,9 +27,7 @@ class TestWebhookReceiver:
     @pytest.fixture
     def client(self):
         """Create FastAPI test client."""
-        # Use the correct TestClient initialization
-        from starlette.testclient import TestClient as StarletteTestClient
-        return StarletteTestClient(app)
+        return TestClient(app)
     
     def test_webhook_receiver_initialization(self):
         """Test that WebhookReceiver initializes properly."""

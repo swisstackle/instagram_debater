@@ -169,8 +169,13 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     body = await request.body()
     payload = await request.json()
     
-    # TODO: Verify signature here if needed
-    # signature = request.headers.get("X-Hub-Signature-256")
+    # Verify signature for security
+    signature = request.headers.get("X-Hub-Signature-256")
+    if signature:
+        from src.instagram_api import InstagramAPI
+        api = InstagramAPI(access_token="", app_secret=_webhook_receiver.app_secret)
+        if not api.verify_webhook_signature(body, signature):
+            raise HTTPException(status_code=403, detail="Invalid signature")
     
     # Process webhook payload
     _webhook_receiver.process_webhook_payload(payload)
