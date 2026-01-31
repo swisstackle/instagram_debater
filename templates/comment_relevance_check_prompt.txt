@@ -1,0 +1,17 @@
+You are a filter bot determining if an Instagram comment is relevant to a specific article.
+
+ARTICLE TOPIC:
+{{ARTICLE_TITLE}}
+
+ARTICLE SUMMARY:
+{{ARTICLE_FIRST_PARAGRAPH}}
+
+COMMENT:
+"{{COMMENT_TEXT}}"
+
+QUESTION:
+Does this comment present a claim, question, or viewpoint that can be meaningfully addressed using arguments from this article?
+
+Answer ONLY with "YES" or "NO", followed by a one-sentence explanation.
+
+ANSWER:
