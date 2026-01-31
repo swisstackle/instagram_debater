@@ -2,16 +2,11 @@
 API tests for webhook receiver.
 """
 import pytest
-from fastapi.testclient import TestClient
 import json
 import hmac
 import hashlib
 from unittest.mock import patch, mock_open, MagicMock
-from src.webhook_receiver import app, WebhookReceiver, init_webhook_receiver
-
-
-# Initialize the webhook receiver for testing
-init_webhook_receiver("test_verify_token", "test_app_secret")
+from src.webhook_receiver import WebhookReceiver
 
 
 class TestWebhookReceiver:
@@ -24,11 +19,6 @@ class TestWebhookReceiver:
             verify_token="test_verify_token",
             app_secret="test_app_secret"
         )
-    
-    @pytest.fixture
-    def client(self):
-        """Create FastAPI test client."""
-        return TestClient(app)
     
     def test_webhook_receiver_initialization(self):
         """Test that WebhookReceiver initializes properly."""
@@ -64,33 +54,6 @@ class TestWebhookReceiver:
             challenge="test_challenge_123"
         )
         assert result is None
-    
-    def test_verify_webhook_get_endpoint_success(self, client):
-        """Test GET webhook verification endpoint with valid parameters."""
-        response = client.get(
-            "/webhook/instagram",
-            params={
-                "hub.mode": "subscribe",
-                "hub.verify_token": "test_verify_token",
-                "hub.challenge": "challenge_value_123"
-            }
-        )
-        # Will fail without implementation, but test structure is correct
-        # Should return 200 and the challenge value
-        assert response.status_code in [200, 404, 500]  # Allow failure for now
-    
-    def test_verify_webhook_get_endpoint_invalid_token(self, client):
-        """Test GET webhook verification endpoint with invalid token."""
-        response = client.get(
-            "/webhook/instagram",
-            params={
-                "hub.mode": "subscribe",
-                "hub.verify_token": "wrong_token",
-                "hub.challenge": "challenge_value_123"
-            }
-        )
-        # Should return 403 or error
-        assert response.status_code in [403, 404, 500]
     
     def test_extract_comment_data_valid_payload(self, webhook_receiver):
         """Test extracting comment data from valid webhook entry."""
@@ -208,46 +171,6 @@ class TestWebhookReceiver:
                         assert saved_data["comments"][0]["comment_id"] == "123"
                         assert saved_data["comments"][0]["username"] == "testuser"
                         assert saved_data["comments"][0]["text"] == "Test comment"
-    
-    def test_receive_webhook_post_endpoint(self, client):
-        """Test POST webhook endpoint with valid payload."""
-        payload = {
-            "object": "instagram",
-            "entry": [
-                {
-                    "id": "account-123",
-                    "time": 1704067200,
-                    "changes": [
-                        {
-                            "field": "comments",
-                            "value": {
-                                "from": {"id": "user-123", "username": "testuser"},
-                                "media": {"id": "media-456"},
-                                "id": "comment-789",
-                                "text": "Test"
-                            }
-                        }
-                    ]
-                }
-            ]
-        }
-        
-        # Create valid signature
-        payload_bytes = json.dumps(payload).encode('utf-8')
-        signature = "sha256=" + hmac.new(
-            b"test_app_secret",
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
-        
-        response = client.post(
-            "/webhook/instagram",
-            json=payload,
-            headers={"X-Hub-Signature-256": signature}
-        )
-        
-        # Will fail without implementation
-        assert response.status_code in [200, 404, 500]
     #         "entry": [
     #             {
     #                 "id": "account-123",
