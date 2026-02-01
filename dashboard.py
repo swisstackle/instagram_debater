@@ -13,15 +13,15 @@ from typing import Dict, Any, List
 def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     """
     Create a dashboard FastAPI application.
-    
+
     Args:
         state_dir: Directory to store state files (default: "state")
-        
+
     Returns:
         FastAPI application instance
     """
     app = FastAPI()
-    
+
     # ================== STATE MANAGEMENT ==================
     def get_audit_log_path():
         return os.path.join(state_dir, "audit_log.json")
@@ -59,14 +59,14 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         """Approve a response."""
         audit_log = load_audit_log()
         entries = audit_log.get("entries", [])
-        
+
         for entry in entries:
             if entry.get("id") == response_id:
                 entry["status"] = "approved"
                 entry["approved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 save_audit_log(audit_log)
                 return {"status": "ok", "response_id": response_id}
-        
+
         raise HTTPException(status_code=404, detail="Response not found")
 
     @app.post("/api/responses/{response_id}/reject")
@@ -74,10 +74,10 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         """Reject a response."""
         data = await request.json()
         reason = data.get("reason", "No reason provided")
-        
+
         audit_log = load_audit_log()
         entries = audit_log.get("entries", [])
-        
+
         for entry in entries:
             if entry.get("id") == response_id:
                 entry["status"] = "rejected"
@@ -85,7 +85,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 entry["rejection_reason"] = reason
                 save_audit_log(audit_log)
                 return {"status": "ok", "response_id": response_id}
-        
+
         raise HTTPException(status_code=404, detail="Response not found")
 
     @app.post("/api/responses/{response_id}/edit")
@@ -93,17 +93,17 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         """Edit a response."""
         data = await request.json()
         new_text = data.get("text", "")
-        
+
         audit_log = load_audit_log()
         entries = audit_log.get("entries", [])
-        
+
         for entry in entries:
             if entry.get("id") == response_id:
                 entry["generated_response"] = new_text
                 entry["edited_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 save_audit_log(audit_log)
                 return {"status": "ok", "response_id": response_id}
-        
+
         raise HTTPException(status_code=404, detail="Response not found")
 
     # ================== DASHBOARD UI ==================
@@ -123,31 +123,31 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #f5f5f5;
             color: #333;
         }
-        
+
         .header {
             background: #fff;
             border-bottom: 1px solid #ddd;
             padding: 1rem 2rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
+
         .header h1 {
             font-size: 1.5rem;
             color: #333;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 2rem auto;
             padding: 0 1rem;
         }
-        
+
         .filters {
             background: #fff;
             padding: 1rem;
@@ -155,12 +155,12 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             margin-bottom: 1rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        
+
         .filter-buttons {
             display: flex;
             gap: 0.5rem;
         }
-        
+
         .filter-btn {
             padding: 0.5rem 1rem;
             border: 1px solid #ddd;
@@ -169,17 +169,17 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             cursor: pointer;
             transition: all 0.2s;
         }
-        
+
         .filter-btn:hover {
             background: #f5f5f5;
         }
-        
+
         .filter-btn.active {
             background: #007bff;
             color: #fff;
             border-color: #007bff;
         }
-        
+
         .response-card {
             background: #fff;
             border-radius: 8px;
@@ -187,24 +187,24 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             margin-bottom: 1rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        
+
         .response-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 1rem;
         }
-        
+
         .response-meta {
             flex: 1;
         }
-        
+
         .response-id {
             font-size: 0.875rem;
             color: #666;
             font-weight: 500;
         }
-        
+
         .response-status {
             display: inline-block;
             padding: 0.25rem 0.75rem;
@@ -213,26 +213,26 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             font-weight: 600;
             margin-top: 0.5rem;
         }
-        
+
         .status-pending_review {
             background: #fff3cd;
             color: #856404;
         }
-        
+
         .status-approved {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .status-rejected {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .response-section {
             margin-bottom: 1rem;
         }
-        
+
         .response-section h3 {
             font-size: 0.875rem;
             color: #666;
@@ -241,7 +241,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .comment-text {
             background: #f8f9fa;
             padding: 1rem;
@@ -250,7 +250,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             font-size: 0.95rem;
             line-height: 1.5;
         }
-        
+
         .generated-response {
             background: #f8f9fa;
             padding: 1rem;
@@ -260,7 +260,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             line-height: 1.6;
             white-space: pre-wrap;
         }
-        
+
         .editable-response {
             width: 100%;
             min-height: 150px;
@@ -271,13 +271,13 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             font-size: 0.95rem;
             line-height: 1.6;
         }
-        
+
         .citations {
             display: flex;
             flex-wrap: wrap;
             gap: 0.5rem;
         }
-        
+
         .citation-tag {
             background: #e9ecef;
             padding: 0.25rem 0.75rem;
@@ -285,13 +285,13 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             font-size: 0.875rem;
             color: #495057;
         }
-        
+
         .actions {
             display: flex;
             gap: 0.5rem;
             margin-top: 1rem;
         }
-        
+
         .btn {
             padding: 0.5rem 1rem;
             border: none;
@@ -301,44 +301,44 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             font-weight: 500;
             transition: all 0.2s;
         }
-        
+
         .btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
-        
+
         .btn-approve {
             background: #28a745;
             color: #fff;
         }
-        
+
         .btn-reject {
             background: #dc3545;
             color: #fff;
         }
-        
+
         .btn-edit {
             background: #007bff;
             color: #fff;
         }
-        
+
         .btn-cancel {
             background: #6c757d;
             color: #fff;
         }
-        
+
         .btn-save {
             background: #28a745;
             color: #fff;
         }
-        
+
         .rejection-form {
             margin-top: 1rem;
             padding: 1rem;
             background: #f8f9fa;
             border-radius: 4px;
         }
-        
+
         .rejection-form textarea {
             width: 100%;
             padding: 0.5rem;
@@ -347,17 +347,17 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             min-height: 80px;
             font-family: inherit;
         }
-        
+
         .rejection-form .actions {
             margin-top: 0.5rem;
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 3rem;
             color: #666;
         }
-        
+
         .empty-state-icon {
             font-size: 3rem;
             margin-bottom: 1rem;
@@ -368,7 +368,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     <div class="header">
         <h1>Instagram Debate Bot Dashboard</h1>
     </div>
-    
+
     <div class="container">
         <div class="filters">
             <div class="filter-buttons">
@@ -378,16 +378,16 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 <button class="filter-btn" data-filter="all">All</button>
             </div>
         </div>
-        
+
         <div id="responses-container">
             <!-- Responses will be loaded here -->
         </div>
     </div>
-    
+
     <script>
         let currentFilter = 'pending_review';
         let responses = [];
-        
+
         // Load responses
         async function loadResponses() {
             try {
@@ -399,7 +399,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 console.error('Error loading responses:', error);
             }
         }
-        
+
         // Filter responses
         function getFilteredResponses() {
             if (currentFilter === 'all') {
@@ -407,12 +407,12 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             }
             return responses.filter(r => r.status === currentFilter);
         }
-        
+
         // Render responses
         function renderResponses() {
             const container = document.getElementById('responses-container');
             const filtered = getFilteredResponses();
-            
+
             if (filtered.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -422,7 +422,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 `;
                 return;
             }
-            
+
             container.innerHTML = filtered.map(response => `
                 <div class="response-card" data-id="${response.id}">
                     <div class="response-header">
@@ -431,18 +431,18 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                             <span class="response-status status-${response.status}">${response.status.replace('_', ' ')}</span>
                         </div>
                     </div>
-                    
+
                     <div class="response-section">
                         <h3>Original Comment</h3>
                         <div class="comment-text">${escapeHtml(response.comment_text || 'N/A')}</div>
                     </div>
-                    
+
                     <div class="response-section">
                         <h3>Generated Response</h3>
                         <div class="generated-response" data-response-id="${response.id}">${escapeHtml(response.generated_response || 'N/A')}</div>
                         <textarea class="editable-response" data-response-id="${response.id}" style="display: none;">${escapeHtml(response.generated_response || '')}</textarea>
                     </div>
-                    
+
                     ${response.citations_used && response.citations_used.length > 0 ? `
                     <div class="response-section">
                         <h3>Citations Used</h3>
@@ -451,7 +451,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                         </div>
                     </div>
                     ` : ''}
-                    
+
                     ${response.status === 'pending_review' ? `
                     <div class="actions" id="main-actions-${response.id}">
                         <button class="btn btn-approve" onclick="approveResponse('${response.id}')">Approve</button>
@@ -466,7 +466,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                         </div>
                     </div>
                     ` : ''}
-                    
+
                     ${response.status === 'rejected' && response.rejection_reason ? `
                     <div class="response-section">
                         <h3>Rejection Reason</h3>
@@ -476,14 +476,14 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 </div>
             `).join('');
         }
-        
+
         // Escape HTML
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
+
         // Approve response
         async function approveResponse(id) {
             try {
@@ -497,17 +497,17 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 console.error('Error approving response:', error);
             }
         }
-        
+
         // Show reject form
         function showRejectForm(id) {
             document.getElementById(`reject-form-${id}`).style.display = 'block';
         }
-        
+
         // Hide reject form
         function hideRejectForm(id) {
             document.getElementById(`reject-form-${id}`).style.display = 'none';
         }
-        
+
         // Confirm reject
         async function confirmReject(id) {
             const reason = document.getElementById(`reject-reason-${id}`).value;
@@ -524,16 +524,16 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 console.error('Error rejecting response:', error);
             }
         }
-        
+
         // Edit response
         function editResponse(id) {
             const responseDiv = document.querySelector(`.generated-response[data-response-id="${id}"]`);
             const textarea = document.querySelector(`.editable-response[data-response-id="${id}"]`);
             const card = document.querySelector(`.response-card[data-id="${id}"]`);
-            
+
             responseDiv.style.display = 'none';
             textarea.style.display = 'block';
-            
+
             // Update actions
             const actionsDiv = card.querySelector('.actions');
             actionsDiv.innerHTML = `
@@ -541,12 +541,12 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 <button class="btn btn-cancel" onclick="cancelEdit('${id}')">Cancel</button>
             `;
         }
-        
+
         // Save edit
         async function saveEdit(id) {
             const textarea = document.querySelector(`.editable-response[data-response-id="${id}"]`);
             const newText = textarea.value;
-            
+
             try {
                 const response = await fetch(`/api/responses/${id}/edit`, {
                     method: 'POST',
@@ -560,12 +560,12 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 console.error('Error saving edit:', error);
             }
         }
-        
+
         // Cancel edit
         function cancelEdit(id) {
             loadResponses();
         }
-        
+
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -575,10 +575,10 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 renderResponses();
             });
         });
-        
+
         // Initial load
         loadResponses();
-        
+
         // Auto-refresh every 5 seconds
         setInterval(loadResponses, 5000);
     </script>
@@ -586,7 +586,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 </html>
     """
         return HTMLResponse(content=html_content)
-    
+
     return app
 
 
@@ -597,7 +597,7 @@ app = create_dashboard_app()
 if __name__ == "__main__":
     import uvicorn
     import sys
-    
+
     port = 5000
     if len(sys.argv) > 1:
         try:
@@ -605,9 +605,9 @@ if __name__ == "__main__":
         except ValueError:
             print(f"Invalid port number: {sys.argv[1]}")
             sys.exit(1)
-    
+
     print(f"Starting Instagram Debate Bot Dashboard on http://127.0.0.1:{port}")
     print(f"State directory: {os.path.abspath('state')}")
     print(f"Press Ctrl+C to stop")
-    
+
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
