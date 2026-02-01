@@ -184,7 +184,9 @@ class CommentProcessor:
         )
 
         # Generate response using LLM
-        template = self.llm_client.load_template("debate_prompt.txt")
+        # Choose template based on whether article is numbered
+        template_name = "debate_prompt.txt" if is_numbered else "debate_prompt_unnumbered.txt"
+        template = self.llm_client.load_template(template_name)
         prompt = self.llm_client.fill_template(template, {
             "TOPIC": metadata["title"],
             "FULL_ARTICLE_TEXT": article_text,
@@ -266,7 +268,10 @@ class CommentProcessor:
             return None
 
         # Generate response using selected article
-        template = self.llm_client.load_template("debate_prompt.txt")
+        # Choose template based on whether article is numbered
+        is_numbered = selected_article.get("is_numbered", True)
+        template_name = "debate_prompt.txt" if is_numbered else "debate_prompt_unnumbered.txt"
+        template = self.llm_client.load_template(template_name)
         prompt = self.llm_client.fill_template(template, {
             "TOPIC": selected_article["title"],
             "FULL_ARTICLE_TEXT": selected_article["content"],
@@ -281,8 +286,7 @@ class CommentProcessor:
 
         response_text = self.llm_client.generate_response(prompt)
 
-        # Get is_numbered flag from selected article
-        is_numbered = selected_article.get("is_numbered", True)
+        # Get is_numbered flag from selected article (already extracted above)
         
         # Create validator with is_numbered flag
         validator = ResponseValidator(selected_article["content"], is_numbered=is_numbered)
