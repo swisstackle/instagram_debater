@@ -82,7 +82,7 @@ Studies demonstrate effectiveness.
         response = "According to §1.1, exercise is beneficial. See §2.1 for more."
         is_valid, errors = validator.validate_citations(response)
         assert is_valid is True
-        assert len(errors) == 0
+        assert not errors
 
     def test_validate_citations_some_invalid(self, validator):
         """Test validation fails with invalid citations."""
@@ -96,7 +96,7 @@ Studies demonstrate effectiveness.
         response = "This is a short response."
         is_valid, errors = validator.validate_length(response)
         assert is_valid is True
-        assert len(errors) == 0
+        assert not errors
 
     def test_validate_length_too_long(self, validator):
         """Test that responses exceeding limit fail."""
@@ -109,7 +109,7 @@ Studies demonstrate effectiveness.
     def test_validate_length_too_short(self, validator):
         """Test that very short responses are flagged."""
         response = "Yes."  # Less than 200 chars
-        is_valid, errors = validator.validate_length(response)
+        is_valid, _errors = validator.validate_length(response)
         # Depending on implementation, might warn but not fail
         assert isinstance(is_valid, bool)
 
@@ -118,7 +118,7 @@ Studies demonstrate effectiveness.
         response = "According to §1.1, exercise is beneficial. The evidence in §2.1 supports this."
         is_valid, errors = validator.validate_response(response)
         assert is_valid is True
-        assert len(errors) == 0
+        assert not errors
 
     def test_validate_response_multiple_failures(self, validator):
         """Test validation with multiple failures."""
@@ -132,6 +132,6 @@ Studies demonstrate effectiveness.
         """Test basic hallucination detection."""
         # This is a simplified test - actual implementation may vary
         response = "According to §1.1, the article discusses fitness topics."
-        is_valid, errors = validator.check_hallucination(response)
+        is_valid, _errors = validator.check_hallucination(response)
         # Should pass as it references content in the article
         assert isinstance(is_valid, bool)

@@ -2,9 +2,10 @@
 Instagram Graph API wrapper for the Instagram Debate Bot.
 Handles webhook verification, comment fetching, and reply posting.
 """
-from typing import Dict, Any, List, Optional
-import hmac
 import hashlib
+import hmac
+from typing import Any, Dict, List
+
 import requests
 
 
@@ -73,7 +74,7 @@ class InstagramAPI:
             "fields": "id,text,timestamp,from,media"
         }
 
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         return response.json()
 
@@ -92,7 +93,7 @@ class InstagramAPI:
             "access_token": self.access_token
         }
 
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         return data.get("data", [])
@@ -113,7 +114,7 @@ class InstagramAPI:
             "fields": "caption"
         }
 
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         return data.get("caption", "")
@@ -135,6 +136,6 @@ class InstagramAPI:
             "message": message
         }
 
-        response = requests.post(url, params=params)
+        response = requests.post(url, params=params, timeout=30)
         response.raise_for_status()
         return response.json()

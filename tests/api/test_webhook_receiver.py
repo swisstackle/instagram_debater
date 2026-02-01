@@ -1,11 +1,11 @@
 """
 API tests for webhook receiver.
 """
-import pytest
 import json
-import hmac
-import hashlib
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open
+
+import pytest
+
 from src.webhook_receiver import WebhookReceiver
 
 
@@ -155,7 +155,7 @@ class TestWebhookReceiver:
         # Mock file operations to verify json.dump is called correctly
         mock_file_data = json.dumps({"version": "1.0", "comments": []})
 
-        with patch("builtins.open", mock_open(read_data=mock_file_data)) as mock_file:
+        with patch("builtins.open", mock_open(read_data=mock_file_data)) as _mock_file:
             with patch("json.dump") as mock_json_dump:
                 with patch("os.path.exists", return_value=True):
                     with patch("os.makedirs"):

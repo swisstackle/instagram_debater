@@ -1,9 +1,10 @@
 """
 Response validation for the Instagram Debate Bot.
-Validates generated responses for citation accuracy, hallucination detection, and length constraints.
+Validates generated responses for citation accuracy, hallucination detection,
+and length constraints.
 """
 import re
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 
 class ResponseValidator:
@@ -31,18 +32,18 @@ class ResponseValidator:
         errors = []
 
         # Validate citations
-        citations_valid, citation_errors = self.validate_citations(response)
+        _citations_valid, citation_errors = self.validate_citations(response)
         errors.extend(citation_errors)
 
         # Validate length
-        length_valid, length_errors = self.validate_length(response)
+        _length_valid, length_errors = self.validate_length(response)
         errors.extend(length_errors)
 
         # Check for hallucinations
-        hallucination_valid, hallucination_errors = self.check_hallucination(response)
+        _hallucination_valid, hallucination_errors = self.check_hallucination(response)
         errors.extend(hallucination_errors)
 
-        is_valid = len(errors) == 0
+        is_valid = not errors
         return is_valid, errors
 
     def validate_citations(self, response: str) -> Tuple[bool, List[str]]:
@@ -62,7 +63,7 @@ class ResponseValidator:
             if not self.citation_exists(citation):
                 errors.append(f"Invalid citation: {citation} not found in article")
 
-        is_valid = len(errors) == 0
+        is_valid = not errors
         return is_valid, errors
 
     def extract_citations(self, text: str) -> List[str]:
@@ -110,7 +111,7 @@ class ResponseValidator:
         if length > 2200:
             errors.append(f"Response too long: {length} characters (max: 2200)")
 
-        is_valid = len(errors) == 0
+        is_valid = not errors
         return is_valid, errors
 
     def check_hallucination(self, response: str) -> Tuple[bool, List[str]]:

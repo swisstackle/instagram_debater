@@ -2,16 +2,18 @@
 LLM client wrapper for OpenRouter API.
 Handles prompt generation and LLM API calls.
 """
-from typing import Dict, Any, Optional
 import os
-import re
+from typing import Any, Dict
+
 from openrouter import OpenRouter
 
 
 class LLMClient:
     """Wrapper for OpenRouter LLM API."""
 
-    def __init__(self, api_key: str, model_name: str, max_tokens: int = 2000, temperature: float = 0.7):
+    def __init__(
+        self, api_key: str, model_name: str, max_tokens: int = 2000, temperature: float = 0.7
+    ):
         """
         Initialize LLM client.
 
@@ -63,7 +65,7 @@ class LLMClient:
         project_root = os.path.dirname(current_dir)
         template_path = os.path.join(project_root, "templates", template_name)
 
-        with open(template_path, 'r') as f:
+        with open(template_path, 'r', encoding='utf-8') as f:
             return f.read()
 
     def fill_template(self, template: str, variables: Dict[str, Any]) -> str:
@@ -83,7 +85,9 @@ class LLMClient:
             result = result.replace(placeholder, str(value))
         return result
 
-    def check_post_topic_relevance(self, article_title: str, article_summary: str, post_caption: str) -> bool:
+    def check_post_topic_relevance(
+        self, article_title: str, article_summary: str, post_caption: str
+    ) -> bool:
         """
         Check if a post is relevant to the article topic.
 
@@ -110,7 +114,9 @@ class LLMClient:
             return True
         return False
 
-    def check_comment_relevance(self, article_title: str, article_summary: str, comment_text: str) -> bool:
+    def check_comment_relevance(
+        self, article_title: str, article_summary: str, comment_text: str
+    ) -> bool:
         """
         Check if a comment is relevant to the article.
 

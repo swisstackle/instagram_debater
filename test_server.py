@@ -2,14 +2,13 @@
 Test server for dashboard E2E testing.
 Includes mock Instagram API, OpenRouter API, and imports the dashboard app.
 """
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import JSONResponse
-import uvicorn
-import json
 import os
-from datetime import datetime, timezone
-from typing import Dict, Any, List
+
+from fastapi import FastAPI, Request
+import uvicorn
+
 from dashboard import create_dashboard_app
+from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
 
 # Create the main test server app
 app = FastAPI()
@@ -22,34 +21,28 @@ STATE_DIR = "test_state"
 os.makedirs(STATE_DIR, exist_ok=True)
 
 def get_audit_log_path():
+    """Get path to audit log file."""
     return os.path.join(STATE_DIR, "audit_log.json")
 
 def get_pending_comments_path():
+    """Get path to pending comments file."""
     return os.path.join(STATE_DIR, "pending_comments.json")
 
 def load_audit_log():
-    path = get_audit_log_path()
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
-    return {"version": "1.0", "entries": []}
+    """Load audit log from file."""
+    return load_json_file(get_audit_log_path(), {"version": "1.0", "entries": []})
 
 def save_audit_log(data):
-    path = get_audit_log_path()
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
+    """Save audit log to file."""
+    save_json_file(get_audit_log_path(), data, ensure_dir=False)
 
 def load_pending_comments():
-    path = get_pending_comments_path()
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
-    return {"version": "1.0", "comments": []}
+    """Load pending comments from file."""
+    return load_json_file(get_pending_comments_path(), {"version": "1.0", "comments": []})
 
 def save_pending_comments(data):
-    path = get_pending_comments_path()
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
+    """Save pending comments to file."""
+    save_json_file(get_pending_comments_path(), data, ensure_dir=False)
 
 # ================== MOCK INSTAGRAM API ==================
 mock_instagram_state = {
@@ -97,8 +90,8 @@ async def mock_trigger_webhook(request: Request):
         "username": data.get("username", "test_user"),
         "user_id": data.get("user_id", "user_123"),
         "text": data.get("text", "This is a test comment"),
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "received_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        "timestamp": get_utc_timestamp(),
+        "received_at": get_utc_timestamp()
     })
     save_pending_comments(pending)
     return {"status": "ok"}
@@ -123,11 +116,14 @@ async def mock_openrouter_chat(request: Request):
         response_text = "YES"
     else:
         # Generate a mock debate response
-        response_text = """According to the article (§1.2), climate change is a critical issue that requires immediate action.
-
-The evidence shows that global temperatures have risen significantly over the past century. This is supported by multiple scientific studies cited in §3.1.
-
-I encourage you to read the full article for more context: [Article Link]"""
+        response_text = (
+            "According to the article (§1.2), climate change is a critical issue "
+            "that requires immediate action.\n\n"
+            "The evidence shows that global temperatures have risen significantly "
+            "over the past century. This is supported by multiple scientific studies "
+            "cited in §3.1.\n\n"
+            "I encourage you to read the full article for more context: [Article Link]"
+        )
 
     return {
         "id": "chatcmpl-mock123",

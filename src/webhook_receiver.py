@@ -2,22 +2,23 @@
 Webhook receiver for Instagram comment notifications.
 Handles webhook verification and incoming comment data.
 """
-from fastapi import FastAPI, Request, Response, Query, HTTPException
-from typing import Dict, Any, Optional
-import json
 import os
-from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI, Request, Response, Query, HTTPException
+
+from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
 
 
 app = FastAPI()
 
 # Global webhook receiver instance (will be initialized with config)
-_webhook_receiver = None
+_webhook_receiver = None  # pylint: disable=invalid-name
 
 
 def init_webhook_receiver(verify_token: str, app_secret: str):
     """Initialize the global webhook receiver instance."""
-    global _webhook_receiver
+    global _webhook_receiver  # pylint: disable=global-statement
     _webhook_receiver = WebhookReceiver(verify_token, app_secret)
 
 
@@ -89,8 +90,8 @@ class WebhookReceiver:
                     "username": value.get("from", {}).get("username"),
                     "user_id": value.get("from", {}).get("id"),
                     "text": value.get("text"),
-                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "received_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                    "timestamp": get_utc_timestamp(),
+                    "received_at": get_utc_timestamp()
                 }
                 return comment_data
 
@@ -109,19 +110,12 @@ class WebhookReceiver:
 
         pending_file = os.path.join(state_dir, "pending_comments.json")
 
-        # Load existing data
-        if os.path.exists(pending_file):
-            with open(pending_file, 'r') as f:
-                data = json.load(f)
-        else:
-            data = {"version": "1.0", "comments": []}
-
-        # Add new comment
+        # Load existing data and add new comment
+        data = load_json_file(pending_file, {"version": "1.0", "comments": []})
         data["comments"].append(comment_data)
 
         # Save back
-        with open(pending_file, 'w') as f:
-            json.dump(data, f, indent=2)
+        save_json_file(pending_file, data)
 
 
 @app.get("/webhook/instagram")
@@ -147,8 +141,8 @@ async def verify_webhook(
     challenge = _webhook_receiver.verify_challenge(hub_mode, hub_verify_token, hub_challenge)
     if challenge:
         return Response(content=challenge, media_type="text/plain")
-    else:
-        raise HTTPException(status_code=403, detail="Forbidden")
+
+    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @app.post("/webhook/instagram")
@@ -172,7 +166,7 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     # Verify signature for security
     signature = request.headers.get("X-Hub-Signature-256")
     if signature:
-        from src.instagram_api import InstagramAPI
+        from src.instagram_api import InstagramAPI  # pylint: disable=import-outside-toplevel
         api = InstagramAPI(access_token="", app_secret=_webhook_receiver.app_secret)
         if not api.verify_webhook_signature(body, signature):
             raise HTTPException(status_code=403, detail="Invalid signature")
