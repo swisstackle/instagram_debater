@@ -18,11 +18,12 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 ├── articles/           # Source articles for debate responses
 ├── src/               # Core application code
 │   ├── config.py          # Configuration management
-│   ├── validator.py       # Response validation
+│   ├── file_utils.py      # File utility functions
 │   ├── instagram_api.py   # Instagram Graph API wrapper
 │   ├── llm_client.py      # OpenRouter LLM client
-│   ├── webhook_receiver.py # Webhook handling
-│   └── processor.py       # Main processing loop
+│   ├── processor.py       # Main processing loop
+│   ├── validator.py       # Response validation
+│   └── webhook_receiver.py # Webhook handling
 ├── templates/         # Prompt templates for LLM
 ├── tests/             # Test suite
 │   ├── unit/              # Unit tests
