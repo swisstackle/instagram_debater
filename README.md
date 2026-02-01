@@ -77,17 +77,6 @@ pytest tests/unit/test_validator.py
 pytest --cov=src tests/
 ```
 
-### Test Results
-
-Current test status:
-- ✅ Config tests: 13/13 passed
-- ✅ Validator tests: 14/14 passed  
-- ✅ Instagram API tests: 9/9 passed
-- ✅ LLM Client tests: 10/10 passed
-- ✅ Webhook receiver tests: 8/8 passed
-
-**Total: 54/54 tests passing**
-
 ## Architecture
 
 ### Core Components
