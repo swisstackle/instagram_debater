@@ -289,8 +289,6 @@ class CommentProcessor:
 
         response_text = self.llm_client.generate_response(prompt)
 
-        # Get is_numbered flag from selected article (already extracted above)
-
         # Create validator with is_numbered flag
         validator = ResponseValidator(selected_article["content"], is_numbered=is_numbered)
 
