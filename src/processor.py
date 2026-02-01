@@ -256,10 +256,12 @@ class CommentProcessor:
             json.dump(data, f, indent=2)
     
     def post_approved_responses(self) -> None:
-        """Post all approved responses to Instagram."""
-        if not self.config.auto_post_enabled:
-            return
+        """Post all approved responses to Instagram.
         
+        Posts any response with status='approved' and posted=False, regardless of 
+        AUTO_POST_ENABLED setting. This allows manually approved responses from the 
+        dashboard to be posted by the processor.
+        """
         audit_file = os.path.join("state", "audit_log.json")
         if not os.path.exists(audit_file):
             return
@@ -327,10 +329,9 @@ class CommentProcessor:
             else:
                 print(f"  - Skipped (not relevant)")
         
-        # Post approved responses if auto-post enabled
-        if self.config.auto_post_enabled:
-            print("Posting approved responses...")
-            self.post_approved_responses()
+        # Post approved responses (both auto-approved and manually approved)
+        print("Posting approved responses...")
+        self.post_approved_responses()
         
         # Clear pending comments
         self.clear_pending_comments()
