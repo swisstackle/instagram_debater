@@ -1,10 +1,11 @@
 """
 API tests for LLM client wrapper.
 """
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from src.llm_client import LLMClient
-import os
 
 
 class TestLLMClient:

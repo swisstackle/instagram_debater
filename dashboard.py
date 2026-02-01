@@ -2,12 +2,13 @@
 Production dashboard server for Instagram Debate Bot.
 Provides a web interface to review and manage generated responses.
 """
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import HTMLResponse
 import json
 import os
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any, List
+
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse
 
 
 def create_dashboard_app(state_dir: str = "state") -> FastAPI:
@@ -29,14 +30,14 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     def load_audit_log():
         path = get_audit_log_path()
         if os.path.exists(path):
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {"version": "1.0", "entries": []}
 
     def save_audit_log(data):
         os.makedirs(state_dir, exist_ok=True)
         path = get_audit_log_path()
-        with open(path, 'w') as f:
+        with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
 
     # ================== DASHBOARD API ==================
@@ -608,6 +609,6 @@ if __name__ == "__main__":
 
     print(f"Starting Instagram Debate Bot Dashboard on http://127.0.0.1:{port}")
     print(f"State directory: {os.path.abspath('state')}")
-    print(f"Press Ctrl+C to stop")
+    print("Press Ctrl+C to stop")
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

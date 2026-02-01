@@ -2,13 +2,15 @@
 Test server for dashboard E2E testing.
 Includes mock Instagram API, OpenRouter API, and imports the dashboard app.
 """
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import JSONResponse
-import uvicorn
 import json
 import os
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any, List
+
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+import uvicorn
+
 from dashboard import create_dashboard_app
 
 # Create the main test server app
@@ -22,33 +24,39 @@ STATE_DIR = "test_state"
 os.makedirs(STATE_DIR, exist_ok=True)
 
 def get_audit_log_path():
+    """Get path to audit log file."""
     return os.path.join(STATE_DIR, "audit_log.json")
 
 def get_pending_comments_path():
+    """Get path to pending comments file."""
     return os.path.join(STATE_DIR, "pending_comments.json")
 
 def load_audit_log():
+    """Load audit log from file."""
     path = get_audit_log_path()
     if os.path.exists(path):
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {"version": "1.0", "entries": []}
 
 def save_audit_log(data):
+    """Save audit log to file."""
     path = get_audit_log_path()
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
 def load_pending_comments():
+    """Load pending comments from file."""
     path = get_pending_comments_path()
     if os.path.exists(path):
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {"version": "1.0", "comments": []}
 
 def save_pending_comments(data):
+    """Save pending comments to file."""
     path = get_pending_comments_path()
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
 # ================== MOCK INSTAGRAM API ==================
@@ -123,11 +131,14 @@ async def mock_openrouter_chat(request: Request):
         response_text = "YES"
     else:
         # Generate a mock debate response
-        response_text = """According to the article (§1.2), climate change is a critical issue that requires immediate action.
-
-The evidence shows that global temperatures have risen significantly over the past century. This is supported by multiple scientific studies cited in §3.1.
-
-I encourage you to read the full article for more context: [Article Link]"""
+        response_text = (
+            "According to the article (§1.2), climate change is a critical issue "
+            "that requires immediate action.\n\n"
+            "The evidence shows that global temperatures have risen significantly "
+            "over the past century. This is supported by multiple scientific studies "
+            "cited in §3.1.\n\n"
+            "I encourage you to read the full article for more context: [Article Link]"
+        )
 
     return {
         "id": "chatcmpl-mock123",

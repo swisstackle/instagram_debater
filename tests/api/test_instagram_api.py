@@ -1,11 +1,13 @@
 """
 API tests for Instagram API wrapper.
 """
+import hashlib
+import hmac
+
 import pytest
 import requests_mock
+
 from src.instagram_api import InstagramAPI
-import hmac
-import hashlib
 
 
 class TestInstagramAPI:

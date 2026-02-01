@@ -29,7 +29,7 @@ def main():
     )
 
     # Load article for validator
-    with open(config.article_path, 'r') as f:
+    with open(config.article_path, 'r', encoding='utf-8') as f:
         article_text = f.read()
 
     validator = ResponseValidator(article_text)
