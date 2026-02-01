@@ -47,16 +47,19 @@ class CommentProcessor:
         Load multiple articles from configuration.
 
         Args:
-            articles_config: List of article configs with 'path', 'link', and optional 'is_numbered' keys
+            articles_config: List of article configs with 'path', 'link', and
+                optional 'is_numbered' keys
 
         Returns:
-            List of article dictionaries with content, metadata, path, link, and is_numbered flag
+            List of article dictionaries with content, metadata, path, link,
+                and is_numbered flag
         """
         articles = []
         for config in articles_config:
             content = self.load_article(config["path"])
             metadata = self.parse_article_metadata(content)
-            is_numbered = config.get("is_numbered", True)  # Default to True for backward compatibility
+            # Default to True for backward compatibility
+            is_numbered = config.get("is_numbered", True)
             articles.append({
                 "path": config["path"],
                 "link": config["link"],
@@ -203,7 +206,7 @@ class CommentProcessor:
 
         # Create validator with is_numbered flag
         validator = ResponseValidator(article_text, is_numbered=is_numbered)
-        
+
         # Validate response
         is_valid, errors = validator.validate_response(response_text)
 
@@ -287,7 +290,7 @@ class CommentProcessor:
         response_text = self.llm_client.generate_response(prompt)
 
         # Get is_numbered flag from selected article (already extracted above)
-        
+
         # Create validator with is_numbered flag
         validator = ResponseValidator(selected_article["content"], is_numbered=is_numbered)
 
