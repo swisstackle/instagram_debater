@@ -49,7 +49,7 @@ class TestCommentProcessor:
         """Create a mock config."""
         mock_cfg = Mock()
         mock_cfg.auto_post_enabled = False
-        mock_cfg.article_path = "articles/test.md"
+        mock_cfg.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
         return mock_cfg
 
     @pytest.fixture
@@ -620,3 +620,203 @@ More text here.
                                 assert "Posting approved responses" in captured.out
                                 # Should still call post_approved_responses
                                 mock_post.assert_called_once()
+
+    def test_load_articles_single(self, processor):
+        """Test loading multiple articles when one article is configured."""
+        articles_config = [
+            {"path": "articles/article1.md", "link": "https://example.com/article1"}
+        ]
+        article_content = "# Article 1\n\nContent here."
+
+        with patch("builtins.open", mock_open(read_data=article_content)):
+            articles = processor.load_articles(articles_config)
+
+            assert len(articles) == 1
+            assert articles[0]["path"] == "articles/article1.md"
+            assert articles[0]["link"] == "https://example.com/article1"
+            assert articles[0]["content"] == article_content
+
+    def test_load_articles_multiple(self, processor):
+        """Test loading multiple articles."""
+        articles_config = [
+            {"path": "articles/article1.md", "link": "https://example.com/article1"},
+            {"path": "articles/article2.md", "link": "https://example.com/article2"}
+        ]
+
+        def mock_open_multiple(filename, *args, **kwargs):
+            """Mock open to return different content based on filename."""
+            if "article1.md" in filename:
+                return mock_open(read_data="# Article 1\n\nContent 1.")()
+            if "article2.md" in filename:
+                return mock_open(read_data="# Article 2\n\nContent 2.")()
+            return mock_open(read_data="")()
+
+        with patch("builtins.open", side_effect=mock_open_multiple):
+            articles = processor.load_articles(articles_config)
+
+            assert len(articles) == 2
+            assert "Article 1" in articles[0]["content"]
+            assert "Article 2" in articles[1]["content"]
+
+    def test_select_relevant_article_single_match(self, processor, sample_comment, mock_llm_client):
+        """Test selecting relevant article when one article matches."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nAbout fitness.",
+                "title": "Article 1",
+                "summary": "About fitness."
+            },
+            {
+                "path": "articles/article2.md",
+                "link": "https://example.com/article2",
+                "content": "# Article 2\n\nAbout nutrition.",
+                "title": "Article 2",
+                "summary": "About nutrition."
+            }
+        ]
+
+        # Mock to return True for first article, False for second
+        mock_llm_client.check_topic_relevance.side_effect = [True, False]
+
+        selected = processor.select_relevant_article(
+            articles,
+            "Post about fitness",
+            sample_comment["text"],
+            ""
+        )
+
+        assert selected is not None
+        assert selected["title"] == "Article 1"
+
+    def test_select_relevant_article_no_match(self, processor, sample_comment, mock_llm_client):
+        """Test selecting relevant article when no articles match."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent.",
+                "title": "Article 1",
+                "summary": "Content."
+            }
+        ]
+
+        mock_llm_client.check_topic_relevance.return_value = False
+
+        selected = processor.select_relevant_article(
+            articles,
+            "Post caption",
+            sample_comment["text"],
+            ""
+        )
+
+        assert selected is None
+
+    def test_select_relevant_article_first_match_wins(self, processor, sample_comment, mock_llm_client):
+        """Test that first matching article is selected when multiple match."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent 1.",
+                "title": "Article 1",
+                "summary": "Content 1."
+            },
+            {
+                "path": "articles/article2.md",
+                "link": "https://example.com/article2",
+                "content": "# Article 2\n\nContent 2.",
+                "title": "Article 2",
+                "summary": "Content 2."
+            }
+        ]
+
+        # Both return True
+        mock_llm_client.check_topic_relevance.return_value = True
+
+        selected = processor.select_relevant_article(
+            articles,
+            "Post caption",
+            sample_comment["text"],
+            ""
+        )
+
+        # Should select first one
+        assert selected is not None
+        assert selected["title"] == "Article 1"
+
+    def test_process_comment_multi_article_with_selection(self, processor, sample_comment, mock_llm_client, mock_validator):
+        """Test processing comment with multiple articles and article selection."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\n## §1. Section\n\nFitness content.",
+                "title": "Article 1",
+                "summary": "Fitness content."
+            }
+        ]
+
+        # Mock article selection to return the article
+        with patch.object(processor, 'select_relevant_article', return_value=articles[0]):
+            result = processor.process_comment_multi_article(sample_comment, articles)
+
+            assert result is not None
+            assert result["comment_id"] == "comment_123"
+            assert "article_used" in result
+            assert result["article_used"]["path"] == "articles/article1.md"
+
+    def test_process_comment_multi_article_no_match(self, processor, sample_comment, mock_llm_client):
+        """Test processing comment when no article matches."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent.",
+                "title": "Article 1",
+                "summary": "Content."
+            }
+        ]
+
+        # Mock article selection to return None
+        with patch.object(processor, 'select_relevant_article', return_value=None):
+            with patch.object(processor, 'save_no_match_log') as mock_save:
+                result = processor.process_comment_multi_article(sample_comment, articles)
+
+                assert result is None
+                mock_save.assert_called_once()
+
+    def test_run_multi_article(self, processor, sample_comment, mock_config, capsys):
+        """Test run method with multiple articles configured."""
+        articles_config = [
+            {"path": "articles/article1.md", "link": "https://example.com/article1"},
+            {"path": "articles/article2.md", "link": "https://example.com/article2"}
+        ]
+        mock_config.articles_config = articles_config
+
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent.",
+                "title": "Article 1",
+                "summary": "Content."
+            }
+        ]
+
+        comments = [sample_comment]
+
+        with patch.object(processor, 'load_articles', return_value=articles):
+            with patch.object(processor, 'load_pending_comments', return_value=comments):
+                with patch.object(processor, 'process_comment_multi_article', return_value={
+                    "comment_id": "comment_123",
+                    "status": "pending_review"
+                }):
+                    with patch.object(processor, 'save_audit_log'):
+                        with patch.object(processor, 'post_approved_responses'):
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+
+                                captured = capsys.readouterr()
+                                assert "Processing 1 pending comment(s)" in captured.out

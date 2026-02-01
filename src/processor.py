@@ -41,6 +41,29 @@ class CommentProcessor:
         with open(article_path, 'r', encoding='utf-8') as f:
             return f.read()
 
+    def load_articles(self, articles_config: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        """
+        Load multiple articles from configuration.
+
+        Args:
+            articles_config: List of article configs with 'path' and 'link' keys
+
+        Returns:
+            List of article dictionaries with content, metadata, path, and link
+        """
+        articles = []
+        for config in articles_config:
+            content = self.load_article(config["path"])
+            metadata = self.parse_article_metadata(content)
+            articles.append({
+                "path": config["path"],
+                "link": config["link"],
+                "content": content,
+                "title": metadata["title"],
+                "summary": metadata["summary"]
+            })
+        return articles
+
     def parse_article_metadata(self, article_text: str) -> Dict[str, str]:
         """
         Parse article title and summary from content.
@@ -85,6 +108,36 @@ class CommentProcessor:
         pending_file = os.path.join("state", "pending_comments.json")
         data = load_json_file(pending_file, {"version": "1.0", "comments": []})
         return data.get("comments", [])
+
+    def select_relevant_article(
+        self,
+        articles: List[Dict[str, Any]],
+        post_caption: str,
+        comment_text: str,
+        thread_context: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Select the first relevant article from a list based on content.
+
+        Args:
+            articles: List of article dictionaries
+            post_caption: Post caption
+            comment_text: Comment text
+            thread_context: Thread conversation context
+
+        Returns:
+            First matching article dictionary or None if no match
+        """
+        for article in articles:
+            if self.llm_client.check_topic_relevance(
+                article["title"],
+                article["summary"],
+                post_caption,
+                comment_text,
+                thread_context
+            ):
+                return article
+        return None
 
     def process_comment(
         self, comment: Dict[str, Any], article_text: str
@@ -164,6 +217,90 @@ class CommentProcessor:
             "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "validation_passed": True,
             "validation_errors": []
+        }
+
+        return result
+
+    def process_comment_multi_article(
+        self, comment: Dict[str, Any], articles: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Process a single comment with multiple articles available.
+
+        Args:
+            comment: Comment data dictionary
+            articles: List of article dictionaries
+
+        Returns:
+            Result dictionary with response and metadata, or None if skipped
+        """
+        # Get post caption and thread context
+        try:
+            post_caption = self.instagram_api.get_post_caption(comment["post_id"])
+        except Exception:  # pylint: disable=broad-exception-caught
+            post_caption = ""
+
+        # Build thread context
+        thread_context = self.build_thread_context(
+            comment["comment_id"],
+            comment["post_id"]
+        )
+
+        # Select relevant article
+        selected_article = self.select_relevant_article(
+            articles,
+            post_caption,
+            comment["text"],
+            thread_context
+        )
+
+        if not selected_article:
+            self.save_no_match_log(comment, "No relevant article found for this comment")
+            return None
+
+        # Generate response using selected article
+        template = self.llm_client.load_template("debate_prompt.txt")
+        prompt = self.llm_client.fill_template(template, {
+            "TOPIC": selected_article["title"],
+            "FULL_ARTICLE_TEXT": selected_article["content"],
+            "POST_CAPTION": post_caption,
+            "USERNAME": comment["username"],
+            "COMMENT_TEXT": comment["text"],
+            "THREAD_CONTEXT": (
+                f"\nPREVIOUS DISCUSSION IN THIS THREAD:\n{thread_context}"
+                if thread_context else ""
+            )
+        })
+
+        response_text = self.llm_client.generate_response(prompt)
+
+        # Validate response
+        is_valid, errors = self.validator.validate_response(response_text)
+
+        if not is_valid:
+            return {
+                "comment_id": comment["comment_id"],
+                "status": "failed",
+                "errors": errors
+            }
+
+        # Extract citations
+        citations = self.validator.extract_citations(response_text)
+
+        result = {
+            "comment_id": comment["comment_id"],
+            "comment_text": comment["text"],
+            "generated_response": response_text,
+            "citations_used": citations,
+            "status": "approved" if self.config.auto_post_enabled else "pending_review",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "validation_passed": True,
+            "validation_errors": [],
+            "article_used": {
+                "path": selected_article["path"],
+                "link": selected_article["link"],
+                "title": selected_article["title"]
+            }
         }
 
         return result
@@ -304,8 +441,8 @@ class CommentProcessor:
 
     def run(self) -> None:
         """Main processing loop entry point."""
-        # Load article
-        article_text = self.load_article(self.config.article_path)
+        # Check if multi-article mode is enabled
+        articles_config = self.config.articles_config
 
         # Load pending comments
         comments = self.load_pending_comments()
@@ -316,17 +453,40 @@ class CommentProcessor:
 
         print(f"Processing {len(comments)} pending comment(s)...")
 
-        # Process each comment
-        for comment in comments:
-            print(f"Processing comment {comment.get('comment_id')}...")
+        # Multi-article or single-article mode
+        if len(articles_config) > 1:
+            # Multi-article mode
+            print(f"Running in multi-article mode with {len(articles_config)} articles")
+            articles = self.load_articles(articles_config)
 
-            result = self.process_comment(comment, article_text)
+            for comment in comments:
+                print(f"Processing comment {comment.get('comment_id')}...")
+                result = self.process_comment_multi_article(comment, articles)
 
-            if result:
-                self.save_audit_log(result)
-                print(f"  - Generated response, status: {result.get('status')}")
-            else:
-                print("  - Skipped (not relevant)")
+                if result:
+                    self.save_audit_log(result)
+                    article_title = result.get("article_used", {}).get("title", "unknown")
+                    status = result.get('status')
+                    print(f"  - Generated response using '{article_title}', status: {status}")
+                else:
+                    print("  - Skipped (not relevant)")
+        else:
+            # Single-article mode
+            if not articles_config:
+                print("No articles configured. Set ARTICLES_CONFIG environment variable.")
+                return
+
+            article_text = self.load_article(articles_config[0]["path"])
+
+            for comment in comments:
+                print(f"Processing comment {comment.get('comment_id')}...")
+                result = self.process_comment(comment, article_text)
+
+                if result:
+                    self.save_audit_log(result)
+                    print(f"  - Generated response, status: {result.get('status')}")
+                else:
+                    print("  - Skipped (not relevant)")
 
         # Post approved responses (both auto-approved and manually approved)
         print("Posting approved responses...")

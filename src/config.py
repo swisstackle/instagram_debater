@@ -2,8 +2,9 @@
 Configuration management for the Instagram Debate Bot.
 Loads environment variables and provides access to configuration settings.
 """
+import json
 import os
-from typing import Optional
+from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
 
@@ -70,11 +71,19 @@ class Config:
         return value in ["true", "1", "yes"]
 
     @property
-    def article_path(self) -> str:
-        """Get path to the article file."""
-        return os.getenv("ARTICLE_PATH", "articles/sample_article.md")
+    def articles_config(self) -> List[Dict[str, str]]:
+        """
+        Get articles configuration (supports multiple articles).
 
-    @property
-    def article_link(self) -> str:
-        """Get link to the online article."""
-        return os.getenv("ARTICLE_LINK", "")
+        Returns list of dicts with 'path' and 'link' keys.
+        Returns empty list if JSON parsing fails or ARTICLES_CONFIG not set.
+        """
+        articles_json = os.getenv("ARTICLES_CONFIG")
+
+        if articles_json:
+            try:
+                return json.loads(articles_json)
+            except json.JSONDecodeError:
+                return []
+
+        return []

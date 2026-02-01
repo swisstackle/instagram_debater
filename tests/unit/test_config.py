@@ -79,14 +79,34 @@ class TestConfig:
         config = Config()
         assert config.auto_post_enabled is False
 
-    def test_article_path_property(self, monkeypatch):
-        """Test article_path property."""
-        monkeypatch.setenv("ARTICLE_PATH", "articles/test.md")
+    def test_articles_config_single_article(self, monkeypatch):
+        """Test articles_config property with single article (JSON format)."""
+        monkeypatch.setenv(
+            "ARTICLES_CONFIG",
+            '[{"path": "articles/article1.md", "link": "https://example.com/article1"}]'
+        )
         config = Config()
-        assert config.article_path == "articles/test.md"
+        articles = config.articles_config
+        assert len(articles) == 1
+        assert articles[0]["path"] == "articles/article1.md"
+        assert articles[0]["link"] == "https://example.com/article1"
 
-    def test_article_link_property(self, monkeypatch):
-        """Test article_link property."""
-        monkeypatch.setenv("ARTICLE_LINK", "https://example.com/article")
+    def test_articles_config_multiple_articles(self, monkeypatch):
+        """Test articles_config property with multiple articles."""
+        monkeypatch.setenv(
+            "ARTICLES_CONFIG",
+            '[{"path": "articles/article1.md", "link": "https://example.com/article1"}, '
+            '{"path": "articles/article2.md", "link": "https://example.com/article2"}]'
+        )
         config = Config()
-        assert config.article_link == "https://example.com/article"
+        articles = config.articles_config
+        assert len(articles) == 2
+        assert articles[0]["path"] == "articles/article1.md"
+        assert articles[1]["path"] == "articles/article2.md"
+
+    def test_articles_config_empty_when_not_set(self, monkeypatch):
+        """Test articles_config returns empty list when ARTICLES_CONFIG not set."""
+        monkeypatch.delenv("ARTICLES_CONFIG", raising=False)
+        config = Config()
+        articles = config.articles_config
+        assert articles == []

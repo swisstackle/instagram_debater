@@ -142,3 +142,49 @@ class LLMClient:
         if "YES" in response_upper[:10]:
             return True
         return False
+
+    def check_topic_relevance(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        article_title: str,
+        article_summary: str,
+        post_caption: str,
+        comment_text: str,
+        thread_context: str
+    ) -> bool:
+        """
+        Check if content is relevant to the article topic.
+
+        This method considers the post caption, comment, and conversation history
+        to determine if the article is relevant.
+
+        Args:
+            article_title: Title of the article
+            article_summary: Summary/first paragraph of article
+            post_caption: Instagram post caption
+            comment_text: Comment text
+            thread_context: Thread conversation context
+
+        Returns:
+            True if content is relevant to article topic
+        """
+        template = self.load_template("topic_relevance_check_prompt.txt")
+
+        thread_text = ""
+        if thread_context:
+            thread_text = f"\nTHREAD CONTEXT:\n{thread_context}"
+
+        prompt = self.fill_template(template, {
+            "ARTICLE_TITLE": article_title,
+            "ARTICLE_FIRST_PARAGRAPH": article_summary,
+            "POST_CAPTION": post_caption,
+            "COMMENT_TEXT": comment_text,
+            "THREAD_CONTEXT": thread_text
+        })
+
+        response = self.generate_response(prompt)
+
+        # Parse response - looking for YES or NO
+        response_upper = response.upper()
+        if "YES" in response_upper[:10]:
+            return True
+        return False
