@@ -371,18 +371,42 @@ More text here.
                         assert len(call_args["entries"]) == 2
                         assert call_args["entries"][1]["id"] == "nomatch_002"
     
-    def test_post_approved_responses_auto_post_disabled(self, processor, mock_config):
-        """Test posting responses when auto-post is disabled."""
+    def test_post_approved_responses_auto_post_disabled_with_approved(self, processor, mock_config, mock_instagram_api):
+        """Test posting approved responses when auto-post is disabled.
+        
+        This test verifies that approved responses are posted even when AUTO_POST_ENABLED is false.
+        This allows manually approved responses from the dashboard to be posted by the processor.
+        """
         mock_config.auto_post_enabled = False
         
-        # Should return early without doing anything
-        processor.post_approved_responses()
+        audit_data = {
+            "version": "1.0",
+            "entries": [
+                {
+                    "comment_id": "comment_123",
+                    "generated_response": "Test response",
+                    "status": "approved",
+                    "posted": False
+                }
+            ]
+        }
         
-        # No API calls should be made
-        processor.instagram_api.post_reply.assert_not_called()
+        with patch("os.path.exists", return_value=True):
+            with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
+                with patch("json.dump") as mock_json_dump:
+                    processor.post_approved_responses()
+                    
+                    # Should post approved responses even when auto-post is disabled
+                    mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
+                    
+                    # Check that data was updated
+                    call_args = mock_json_dump.call_args[0][0]
+                    assert call_args["entries"][0]["posted"] is True
+                    assert "posted_at" in call_args["entries"][0]
     
     def test_post_approved_responses_no_audit_file(self, processor, mock_config):
         """Test posting responses when audit file doesn't exist."""
+        # AUTO_POST_ENABLED setting should not matter here
         mock_config.auto_post_enabled = True
         
         with patch("os.path.exists", return_value=False):
@@ -391,8 +415,12 @@ More text here.
             processor.instagram_api.post_reply.assert_not_called()
     
     def test_post_approved_responses_success(self, processor, mock_config, mock_instagram_api):
-        """Test successfully posting approved responses."""
-        mock_config.auto_post_enabled = True
+        """Test successfully posting approved responses.
+        
+        AUTO_POST_ENABLED should not affect posting of already approved responses.
+        """
+        # Set to False to emphasize that AUTO_POST_ENABLED doesn't affect approved response posting
+        mock_config.auto_post_enabled = False
         
         audit_data = {
             "version": "1.0",
@@ -427,7 +455,8 @@ More text here.
     
     def test_post_approved_responses_already_posted(self, processor, mock_config, mock_instagram_api):
         """Test posting responses when already posted."""
-        mock_config.auto_post_enabled = True
+        # AUTO_POST_ENABLED should not matter for already posted responses
+        mock_config.auto_post_enabled = False
         
         audit_data = {
             "version": "1.0",
@@ -451,7 +480,8 @@ More text here.
     
     def test_post_approved_responses_api_exception(self, processor, mock_config, mock_instagram_api):
         """Test posting responses when API raises exception."""
-        mock_config.auto_post_enabled = True
+        # AUTO_POST_ENABLED should not affect error handling
+        mock_config.auto_post_enabled = False
         mock_instagram_api.post_reply.side_effect = Exception("API Error")
         
         audit_data = {
@@ -514,12 +544,15 @@ More text here.
                     "status": "pending_review"
                 }):
                     with patch.object(processor, 'save_audit_log'):
-                        with patch.object(processor, 'clear_pending_comments'):
-                            processor.run()
-                            
-                            captured = capsys.readouterr()
-                            assert "Processing 1 pending comment(s)" in captured.out
-                            assert "Generated response" in captured.out
+                        with patch.object(processor, 'post_approved_responses') as mock_post:
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+                                
+                                captured = capsys.readouterr()
+                                assert "Processing 1 pending comment(s)" in captured.out
+                                assert "Generated response" in captured.out
+                                # Should always call post_approved_responses
+                                mock_post.assert_called_once()
     
     def test_run_with_skipped_comment(self, processor, sample_article, sample_comment, capsys):
         """Test run method with skipped comment."""
@@ -528,14 +561,20 @@ More text here.
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=comments):
                 with patch.object(processor, 'process_comment', return_value=None):
-                    with patch.object(processor, 'clear_pending_comments'):
-                        processor.run()
-                        
-                        captured = capsys.readouterr()
-                        assert "Skipped (not relevant)" in captured.out
+                    with patch.object(processor, 'post_approved_responses') as mock_post:
+                        with patch.object(processor, 'clear_pending_comments'):
+                            processor.run()
+                            
+                            captured = capsys.readouterr()
+                            assert "Skipped (not relevant)" in captured.out
+                            # Should still call post_approved_responses
+                            mock_post.assert_called_once()
     
     def test_run_with_auto_post_enabled(self, processor, sample_article, sample_comment, mock_config, capsys):
-        """Test run method with auto-post enabled."""
+        """Test run method with auto-post enabled.
+        
+        When AUTO_POST_ENABLED is true, responses should be auto-approved and then posted.
+        """
         mock_config.auto_post_enabled = True
         comments = [sample_comment]
         
@@ -546,10 +585,35 @@ More text here.
                     "status": "approved"
                 }):
                     with patch.object(processor, 'save_audit_log'):
-                        with patch.object(processor, 'post_approved_responses'):
+                        with patch.object(processor, 'post_approved_responses') as mock_post:
                             with patch.object(processor, 'clear_pending_comments'):
                                 processor.run()
                                 
                                 captured = capsys.readouterr()
                                 assert "Posting approved responses" in captured.out
-                                processor.post_approved_responses.assert_called_once()
+                                mock_post.assert_called_once()
+    
+    def test_run_with_auto_post_disabled(self, processor, sample_article, sample_comment, mock_config, capsys):
+        """Test run method with auto-post disabled.
+        
+        When AUTO_POST_ENABLED is false, responses should go to pending_review,
+        but post_approved_responses should still be called to post any manually approved responses.
+        """
+        mock_config.auto_post_enabled = False
+        comments = [sample_comment]
+        
+        with patch.object(processor, 'load_article', return_value=sample_article):
+            with patch.object(processor, 'load_pending_comments', return_value=comments):
+                with patch.object(processor, 'process_comment', return_value={
+                    "comment_id": "comment_123",
+                    "status": "pending_review"
+                }):
+                    with patch.object(processor, 'save_audit_log'):
+                        with patch.object(processor, 'post_approved_responses') as mock_post:
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+                                
+                                captured = capsys.readouterr()
+                                assert "Posting approved responses" in captured.out
+                                # Should still call post_approved_responses
+                                mock_post.assert_called_once()
