@@ -89,13 +89,13 @@ class Config:
         Falls back to legacy ARTICLE_PATH/ARTICLE_LINK if ARTICLES_CONFIG not set.
         """
         articles_json = os.getenv("ARTICLES_CONFIG")
-        
+
         if articles_json:
             try:
                 return json.loads(articles_json)
             except json.JSONDecodeError:
                 return []
-        
+
         # Fallback to legacy single article configuration
         article_path = os.getenv("ARTICLE_PATH")
         if article_path:
@@ -103,5 +103,5 @@ class Config:
                 "path": article_path,
                 "link": os.getenv("ARTICLE_LINK", "")
             }]
-        
+
         return []

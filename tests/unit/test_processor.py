@@ -628,10 +628,10 @@ More text here.
             {"path": "articles/article1.md", "link": "https://example.com/article1"}
         ]
         article_content = "# Article 1\n\nContent here."
-        
+
         with patch("builtins.open", mock_open(read_data=article_content)):
             articles = processor.load_articles(articles_config)
-            
+
             assert len(articles) == 1
             assert articles[0]["path"] == "articles/article1.md"
             assert articles[0]["link"] == "https://example.com/article1"
@@ -643,18 +643,18 @@ More text here.
             {"path": "articles/article1.md", "link": "https://example.com/article1"},
             {"path": "articles/article2.md", "link": "https://example.com/article2"}
         ]
-        
+
         def mock_open_multiple(filename, *args, **kwargs):
             """Mock open to return different content based on filename."""
             if "article1.md" in filename:
                 return mock_open(read_data="# Article 1\n\nContent 1.")()
-            elif "article2.md" in filename:
+            if "article2.md" in filename:
                 return mock_open(read_data="# Article 2\n\nContent 2.")()
             return mock_open(read_data="")()
-        
+
         with patch("builtins.open", side_effect=mock_open_multiple):
             articles = processor.load_articles(articles_config)
-            
+
             assert len(articles) == 2
             assert "Article 1" in articles[0]["content"]
             assert "Article 2" in articles[1]["content"]
@@ -677,17 +677,17 @@ More text here.
                 "summary": "About nutrition."
             }
         ]
-        
+
         # Mock to return True for first article, False for second
         mock_llm_client.check_topic_relevance.side_effect = [True, False]
-        
+
         selected = processor.select_relevant_article(
             articles,
             "Post about fitness",
             sample_comment["text"],
             ""
         )
-        
+
         assert selected is not None
         assert selected["title"] == "Article 1"
 
@@ -702,16 +702,16 @@ More text here.
                 "summary": "Content."
             }
         ]
-        
+
         mock_llm_client.check_topic_relevance.return_value = False
-        
+
         selected = processor.select_relevant_article(
             articles,
             "Post caption",
             sample_comment["text"],
             ""
         )
-        
+
         assert selected is None
 
     def test_select_relevant_article_first_match_wins(self, processor, sample_comment, mock_llm_client):
@@ -732,17 +732,17 @@ More text here.
                 "summary": "Content 2."
             }
         ]
-        
+
         # Both return True
         mock_llm_client.check_topic_relevance.return_value = True
-        
+
         selected = processor.select_relevant_article(
             articles,
             "Post caption",
             sample_comment["text"],
             ""
         )
-        
+
         # Should select first one
         assert selected is not None
         assert selected["title"] == "Article 1"
@@ -758,11 +758,11 @@ More text here.
                 "summary": "Fitness content."
             }
         ]
-        
+
         # Mock article selection to return the article
         with patch.object(processor, 'select_relevant_article', return_value=articles[0]):
             result = processor.process_comment_multi_article(sample_comment, articles)
-            
+
             assert result is not None
             assert result["comment_id"] == "comment_123"
             assert "article_used" in result
@@ -779,12 +779,12 @@ More text here.
                 "summary": "Content."
             }
         ]
-        
+
         # Mock article selection to return None
         with patch.object(processor, 'select_relevant_article', return_value=None):
             with patch.object(processor, 'save_no_match_log') as mock_save:
                 result = processor.process_comment_multi_article(sample_comment, articles)
-                
+
                 assert result is None
                 mock_save.assert_called_once()
 
@@ -795,7 +795,7 @@ More text here.
             {"path": "articles/article2.md", "link": "https://example.com/article2"}
         ]
         mock_config.articles_config = articles_config
-        
+
         articles = [
             {
                 "path": "articles/article1.md",
@@ -805,9 +805,9 @@ More text here.
                 "summary": "Content."
             }
         ]
-        
+
         comments = [sample_comment]
-        
+
         with patch.object(processor, 'load_articles', return_value=articles):
             with patch.object(processor, 'load_pending_comments', return_value=comments):
                 with patch.object(processor, 'process_comment_multi_article', return_value={
@@ -818,6 +818,6 @@ More text here.
                         with patch.object(processor, 'post_approved_responses'):
                             with patch.object(processor, 'clear_pending_comments'):
                                 processor.run()
-                                
+
                                 captured = capsys.readouterr()
                                 assert "Processing 1 pending comment(s)" in captured.out

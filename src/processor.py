@@ -443,7 +443,7 @@ class CommentProcessor:
         """Main processing loop entry point."""
         # Check if multi-article mode is enabled
         articles_config = self.config.articles_config
-        
+
         # Load pending comments
         comments = self.load_pending_comments()
 
@@ -458,7 +458,7 @@ class CommentProcessor:
             # Multi-article mode
             print(f"Running in multi-article mode with {len(articles_config)} articles")
             articles = self.load_articles(articles_config)
-            
+
             for comment in comments:
                 print(f"Processing comment {comment.get('comment_id')}...")
                 result = self.process_comment_multi_article(comment, articles)
@@ -466,7 +466,8 @@ class CommentProcessor:
                 if result:
                     self.save_audit_log(result)
                     article_title = result.get("article_used", {}).get("title", "unknown")
-                    print(f"  - Generated response using '{article_title}', status: {result.get('status')}")
+                    status = result.get('status')
+                    print(f"  - Generated response using '{article_title}', status: {status}")
                 else:
                     print("  - Skipped (not relevant)")
         else:
@@ -476,7 +477,7 @@ class CommentProcessor:
             else:
                 # Fallback to old config
                 article_text = self.load_article(self.config.article_path)
-            
+
             for comment in comments:
                 print(f"Processing comment {comment.get('comment_id')}...")
                 result = self.process_comment(comment, article_text)
