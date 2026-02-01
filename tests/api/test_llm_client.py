@@ -32,6 +32,7 @@ class TestLLMClient:
         assert client is not None
 
     @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
     def test_generate_response_success(self, mock_openrouter, llm_client):
         """Test generating a response using the LLM."""
         # Mock the OpenRouter client
@@ -92,6 +93,7 @@ class TestLLMClient:
         assert "Bob" in result
 
     @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
     def test_check_post_topic_relevance_yes(self, mock_openrouter, llm_client):
         """Test checking post topic relevance when answer is YES."""
         mock_client = Mock()
@@ -111,6 +113,7 @@ class TestLLMClient:
         assert is_relevant is True
 
     @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
     def test_check_post_topic_relevance_no(self, mock_openrouter, llm_client):
         """Test checking post topic relevance when answer is NO."""
         mock_client = Mock()
@@ -130,6 +133,7 @@ class TestLLMClient:
         assert is_relevant is False
 
     @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
     def test_check_comment_relevance_yes(self, mock_openrouter, llm_client):
         """Test checking comment relevance when answer is YES."""
         mock_client = Mock()
@@ -149,6 +153,7 @@ class TestLLMClient:
         assert is_relevant is True
 
     @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
     def test_check_comment_relevance_no(self, mock_openrouter, llm_client):
         """Test checking comment relevance when answer is NO."""
         mock_client = Mock()

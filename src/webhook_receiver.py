@@ -13,12 +13,12 @@ from fastapi import FastAPI, Request, Response, Query, HTTPException
 app = FastAPI()
 
 # Global webhook receiver instance (will be initialized with config)
-_webhook_receiver = None
+_webhook_receiver = None  # pylint: disable=invalid-name
 
 
 def init_webhook_receiver(verify_token: str, app_secret: str):
     """Initialize the global webhook receiver instance."""
-    global _webhook_receiver
+    global _webhook_receiver  # pylint: disable=global-statement
     _webhook_receiver = WebhookReceiver(verify_token, app_secret)
 
 
@@ -173,7 +173,7 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     # Verify signature for security
     signature = request.headers.get("X-Hub-Signature-256")
     if signature:
-        from src.instagram_api import InstagramAPI
+        from src.instagram_api import InstagramAPI  # pylint: disable=import-outside-toplevel
         api = InstagramAPI(access_token="", app_secret=_webhook_receiver.app_secret)
         if not api.verify_webhook_signature(body, signature):
             raise HTTPException(status_code=403, detail="Invalid signature")

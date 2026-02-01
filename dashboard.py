@@ -20,7 +20,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     Returns:
         FastAPI application instance
     """
-    app = FastAPI()
+    app = FastAPI()  # pylint: disable=redefined-outer-name
 
     # ================== STATE MANAGEMENT ==================
     def get_audit_log_path():

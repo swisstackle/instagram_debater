@@ -172,7 +172,7 @@ class CommentProcessor:
 
         return result
 
-    def build_thread_context(self, comment_id: str, post_id: str = None) -> str:
+    def build_thread_context(self, comment_id: str, post_id: str = None) -> str:  # pylint: disable=unused-argument
         """
         Build conversation context for a comment.
 

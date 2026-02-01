@@ -280,7 +280,7 @@ More text here.
         lines = context.split("\n")
         assert len(lines) == 5
 
-    def test_save_audit_log_new_file(self, processor, temp_state_dir):
+    def test_save_audit_log_new_file(self, processor, _temp_state_dir):
         """Test saving audit log when file doesn't exist."""
         log_entry = {
             "comment_id": "comment_123",
