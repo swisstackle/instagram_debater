@@ -25,7 +25,6 @@ jobs:
       - name: Analyse code for duplication only (Pylint)
         run: |
           pylint \
-            --disable=all \
             --enable=all \
             --min-similarity-lines=20 \
             $(git ls-files '*.py')
