@@ -1,10 +1,8 @@
 """
 API tests for webhook receiver.
 """
-import hashlib
-import hmac
 import json
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open
 
 import pytest
 

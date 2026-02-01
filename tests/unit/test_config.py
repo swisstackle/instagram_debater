@@ -1,8 +1,11 @@
 """
 Unit tests for configuration management.
 """
-import pytest
+# pylint: disable=unused-import
 import os
+
+import pytest
+
 from src.config import Config
 
 

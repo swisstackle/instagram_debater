@@ -1,13 +1,15 @@
 """
 Unit tests for comment processor.
 """
-import pytest
+# pylint: disable=too-many-public-methods,line-too-long,too-many-arguments,too-many-positional-arguments
 import json
 import os
-import tempfile
 import shutil
-from datetime import datetime, timezone
-from unittest.mock import Mock, MagicMock, patch, mock_open
+import tempfile
+from unittest.mock import Mock, patch, mock_open
+
+import pytest
+
 from src.processor import CommentProcessor
 
 

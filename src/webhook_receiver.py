@@ -13,13 +13,13 @@ from fastapi import FastAPI, Request, Response, Query, HTTPException
 app = FastAPI()
 
 # Global webhook receiver instance (will be initialized with config)
-_WEBHOOK_RECEIVER = None
+_webhook_receiver = None
 
 
-def init_WEBHOOK_RECEIVER(verify_token: str, app_secret: str):
+def init_webhook_receiver(verify_token: str, app_secret: str):
     """Initialize the global webhook receiver instance."""
-    global _WEBHOOK_RECEIVER
-    _WEBHOOK_RECEIVER = WebhookReceiver(verify_token, app_secret)
+    global _webhook_receiver
+    _webhook_receiver = WebhookReceiver(verify_token, app_secret)
 
 
 class WebhookReceiver:
@@ -142,10 +142,10 @@ async def verify_webhook(
     Returns:
         Challenge string or 403 Forbidden
     """
-    if _WEBHOOK_RECEIVER is None:
+    if _webhook_receiver is None:
         raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
 
-    challenge = _WEBHOOK_RECEIVER.verify_challenge(hub_mode, hub_verify_token, hub_challenge)
+    challenge = _webhook_receiver.verify_challenge(hub_mode, hub_verify_token, hub_challenge)
     if challenge:
         return Response(content=challenge, media_type="text/plain")
 
@@ -163,7 +163,7 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     Returns:
         Success response
     """
-    if _WEBHOOK_RECEIVER is None:
+    if _webhook_receiver is None:
         raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
 
     # Get request body
@@ -174,11 +174,11 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     signature = request.headers.get("X-Hub-Signature-256")
     if signature:
         from src.instagram_api import InstagramAPI
-        api = InstagramAPI(access_token="", app_secret=_WEBHOOK_RECEIVER.app_secret)
+        api = InstagramAPI(access_token="", app_secret=_webhook_receiver.app_secret)
         if not api.verify_webhook_signature(body, signature):
             raise HTTPException(status_code=403, detail="Invalid signature")
 
     # Process webhook payload
-    _WEBHOOK_RECEIVER.process_webhook_payload(payload)
+    _webhook_receiver.process_webhook_payload(payload)
 
     return {"status": "ok"}

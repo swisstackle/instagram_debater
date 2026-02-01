@@ -140,7 +140,7 @@ class TestInstagramAPI:
                 result = instagram_api.post_reply("comment-123", "Test")
                 # If it doesn't raise, check for error indication
                 assert result is None or "error" in result
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 # Or it might raise an exception
                 assert isinstance(e, Exception)
 
@@ -157,5 +157,5 @@ class TestInstagramAPI:
             try:
                 result = instagram_api.get_comment("comment-999")
                 assert result is None or "error" in result
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 assert isinstance(e, Exception)

@@ -5,9 +5,8 @@ Includes mock Instagram API, OpenRouter API, and imports the dashboard app.
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, List
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import uvicorn
 

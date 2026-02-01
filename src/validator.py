@@ -1,6 +1,7 @@
 """
 Response validation for the Instagram Debate Bot.
-Validates generated responses for citation accuracy, hallucination detection, and length constraints.
+Validates generated responses for citation accuracy, hallucination detection,
+and length constraints.
 """
 import re
 from typing import List, Tuple

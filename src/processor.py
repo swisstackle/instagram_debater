@@ -109,7 +109,7 @@ class CommentProcessor:
         # Check if post is relevant to article topic
         try:
             post_caption = self.instagram_api.get_post_caption(comment["post_id"])
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             post_caption = ""
 
         if post_caption and not self.llm_client.check_post_topic_relevance(
@@ -192,7 +192,7 @@ class CommentProcessor:
                     text = reply.get("text", "")
                     context_lines.append(f"@{username}: {text}")
                 return "\n".join(context_lines)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             pass
 
         return ""
@@ -293,7 +293,7 @@ class CommentProcessor:
                     with open(posted_file, 'a', encoding='utf-8') as f:
                         f.write(entry["comment_id"] + "\n")
 
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     entry["post_error"] = str(e)
 
         # Save updated audit log
