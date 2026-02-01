@@ -54,9 +54,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `OPENROUTER_API_KEY` - OpenRouter API key for LLM access
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
 
-4. **Article configuration (choose one):**
-
-   **Option A: Multiple articles (recommended)**
+4. **Article configuration:**
    - `ARTICLES_CONFIG` - JSON array with article configurations
    ```json
    [
@@ -64,10 +62,6 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
      {"path": "articles/article2.md", "link": "https://example.com/article2"}
    ]
    ```
-
-   **Option B: Single article (legacy)**
-   - `ARTICLE_PATH` - Path to your source article
-   - `ARTICLE_LINK` - URL to the online article
 
 ## Development
 

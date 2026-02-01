@@ -471,12 +471,12 @@ class CommentProcessor:
                 else:
                     print("  - Skipped (not relevant)")
         else:
-            # Single-article mode (legacy)
-            if articles_config:
-                article_text = self.load_article(articles_config[0]["path"])
-            else:
-                # Fallback to old config
-                article_text = self.load_article(self.config.article_path)
+            # Single-article mode
+            if not articles_config:
+                print("No articles configured. Set ARTICLES_CONFIG environment variable.")
+                return
+
+            article_text = self.load_article(articles_config[0]["path"])
 
             for comment in comments:
                 print(f"Processing comment {comment.get('comment_id')}...")

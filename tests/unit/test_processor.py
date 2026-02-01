@@ -49,7 +49,6 @@ class TestCommentProcessor:
         """Create a mock config."""
         mock_cfg = Mock()
         mock_cfg.auto_post_enabled = False
-        mock_cfg.article_path = "articles/test.md"
         mock_cfg.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
         return mock_cfg
 

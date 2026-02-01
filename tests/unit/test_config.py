@@ -79,18 +79,6 @@ class TestConfig:
         config = Config()
         assert config.auto_post_enabled is False
 
-    def test_article_path_property(self, monkeypatch):
-        """Test article_path property (legacy single article)."""
-        monkeypatch.setenv("ARTICLE_PATH", "articles/test.md")
-        config = Config()
-        assert config.article_path == "articles/test.md"
-
-    def test_article_link_property(self, monkeypatch):
-        """Test article_link property."""
-        monkeypatch.setenv("ARTICLE_LINK", "https://example.com/article")
-        config = Config()
-        assert config.article_link == "https://example.com/article"
-
     def test_articles_config_single_article(self, monkeypatch):
         """Test articles_config property with single article (JSON format)."""
         monkeypatch.setenv(
@@ -116,21 +104,9 @@ class TestConfig:
         assert articles[0]["path"] == "articles/article1.md"
         assert articles[1]["path"] == "articles/article2.md"
 
-    def test_articles_config_fallback_to_legacy(self, monkeypatch):
-        """Test articles_config falls back to legacy ARTICLE_PATH if ARTICLES_CONFIG not set."""
+    def test_articles_config_empty_when_not_set(self, monkeypatch):
+        """Test articles_config returns empty list when ARTICLES_CONFIG not set."""
         monkeypatch.delenv("ARTICLES_CONFIG", raising=False)
-        monkeypatch.setenv("ARTICLE_PATH", "articles/legacy.md")
-        monkeypatch.setenv("ARTICLE_LINK", "https://example.com/legacy")
-        config = Config()
-        articles = config.articles_config
-        assert len(articles) == 1
-        assert articles[0]["path"] == "articles/legacy.md"
-        assert articles[0]["link"] == "https://example.com/legacy"
-
-    def test_articles_config_empty_when_none_set(self, monkeypatch):
-        """Test articles_config returns empty list when neither config is set."""
-        monkeypatch.delenv("ARTICLES_CONFIG", raising=False)
-        monkeypatch.delenv("ARTICLE_PATH", raising=False)
         config = Config()
         articles = config.articles_config
         assert articles == []

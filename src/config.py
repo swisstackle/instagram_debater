@@ -71,23 +71,12 @@ class Config:
         return value in ["true", "1", "yes"]
 
     @property
-    def article_path(self) -> str:
-        """Get path to the article file."""
-        return os.getenv("ARTICLE_PATH", "articles/sample_article.md")
-
-    @property
-    def article_link(self) -> str:
-        """Get link to the online article."""
-        return os.getenv("ARTICLE_LINK", "")
-
-    @property
     def articles_config(self) -> List[Dict[str, str]]:
         """
         Get articles configuration (supports multiple articles).
 
         Returns list of dicts with 'path' and 'link' keys.
-        Falls back to legacy ARTICLE_PATH/ARTICLE_LINK if ARTICLES_CONFIG not set.
-        Returns empty list if JSON parsing fails or no configuration exists.
+        Returns empty list if JSON parsing fails or ARTICLES_CONFIG not set.
         """
         articles_json = os.getenv("ARTICLES_CONFIG")
 
@@ -96,13 +85,5 @@ class Config:
                 return json.loads(articles_json)
             except json.JSONDecodeError:
                 return []
-
-        # Fallback to legacy single article configuration
-        article_path = os.getenv("ARTICLE_PATH")
-        if article_path:
-            return [{
-                "path": article_path,
-                "link": os.getenv("ARTICLE_LINK", "")
-            }]
 
         return []
