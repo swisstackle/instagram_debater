@@ -11,7 +11,7 @@
 
 ### 1.1 What is the Instagram Debate-Bot?
 
-The Instagram Debate-Bot is a lightweight, stateless automation tool that engages with Instagram post commenters by presenting counter-arguments drawn from multiple locally-stored numbered Markdown articles. The bot monitors comments on designated Instagram posts, identifies claims or statements that can be debated, determines which article is most relevant, and responds with relevant citations and arguments from the selected article.
+The Instagram Debate-Bot is a lightweight, stateless automation tool that engages with Instagram post commenters by presenting counter-arguments drawn from multiple locally-stored Markdown articles. The bot monitors comments on designated Instagram posts, identifies claims or statements that can be debated, determines which article is most relevant, and responds with arguments from the selected article. Articles can be numbered (with §X.Y.Z citations) or unnumbered (without citations).
 
 ### 1.2 Purpose
 
@@ -30,7 +30,7 @@ The bot is intended for accounts that share educational or advocacy content acro
 
 ### 2.1 Primary Goals
 
-1. **Accurate Citation:** All bot responses must cite specific sections from the source article (e.g., "§1.1.1", "§2.3") and include the exact argument or evidence
+1. **Accurate Citation:** Bot responses from numbered articles must cite specific sections (e.g., "§1.1.1", "§2.3"). Unnumbered articles do not require citations.
 2. **Relevance Filtering:** Only respond to comments that present debatable claims related to the article's subject matter
 3. **Human-Like Tone:** Generate responses that are conversational, respectful, and non-repetitive
 4. **Full Transparency:** Clearly identify the bot as automated and provide links to the full article
@@ -127,8 +127,10 @@ These constraints are **non-negotiable** and define the architecture:
 
 ```
 /
-├── articles/
-│   └── arguments-against-the-big-three.md  # Source article
+├── articles/                               # Numbered articles with §X.Y.Z sections
+│   └── arguments-against-the-big-three.md
+├── articles_unnumbered/                    # Unnumbered articles without citations
+│   └── general-fitness-guidelines.md
 ├── state/
 │   ├── pending_comments.json
 │   ├── audit_log.json
@@ -142,14 +144,38 @@ These constraints are **non-negotiable** and define the architecture:
 │   ├── validator.py              # Response validation
 │   └── config.py                 # Configuration
 ├── templates/
-│   ├── debate_prompt.txt         # LLM prompt template
-│   └── match_check_prompt.txt    # Relevance check template
+│   ├── debate_prompt.txt                   # For numbered articles
+│   ├── debate_prompt_unnumbered.txt        # For unnumbered articles
+│   └── match_check_prompt.txt              # Relevance check template
 ├── tests/
 │   └── ...
 ├── .env.example
 ├── requirements.txt
 └── README.md
 ```
+
+### 5.3 Article Configuration
+
+Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON array:
+
+```json
+[
+  {
+    "path": "articles/article1.md",
+    "link": "https://example.com/article1",
+    "is_numbered": true
+  },
+  {
+    "path": "articles_unnumbered/article2.md",
+    "link": "https://example.com/article2",
+    "is_numbered": false
+  }
+]
+```
+
+- **is_numbered** (optional, default: true): 
+  - `true` - Article uses numbered sections (§X.Y.Z), responses include citations
+  - `false` - Article without numbered sections, responses reference content naturally
 
 ---
 
@@ -652,9 +678,11 @@ All generated responses must pass these checks before being saved or posted:
 
 ### 11.1 Citation Validation
 
+- **Scope:** Applies only to numbered articles (is_numbered: true)
 - **Rule:** Every citation (e.g., "§1.1.1") must exist in the source article
 - **Check:** Regex match all `§\d+(\.\d+)*` patterns, verify against article structure
 - **Failure:** If invalid citation found, reject response and log error
+- **Unnumbered Articles:** Citation validation is skipped for articles marked as is_numbered: false
 
 ### 11.2 Hallucination Detection
 

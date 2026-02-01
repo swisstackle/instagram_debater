@@ -10,14 +10,16 @@ from typing import List, Tuple
 class ResponseValidator:
     """Validates LLM-generated responses against article content and Instagram constraints."""
 
-    def __init__(self, article_text: str):
+    def __init__(self, article_text: str, is_numbered: bool = True):
         """
         Initialize validator with article content.
 
         Args:
             article_text: Full text of the source article
+            is_numbered: Whether the article uses numbered sections (default: True)
         """
         self.article_text = article_text
+        self.is_numbered = is_numbered
 
     def validate_response(self, response: str) -> Tuple[bool, List[str]]:
         """
@@ -56,6 +58,10 @@ class ResponseValidator:
         Returns:
             Tuple of (is_valid, list_of_errors)
         """
+        # Skip citation validation for unnumbered articles
+        if not self.is_numbered:
+            return True, []
+
         errors = []
         citations = self.extract_citations(response)
 

@@ -135,3 +135,71 @@ Studies demonstrate effectiveness.
         is_valid, _errors = validator.check_hallucination(response)
         # Should pass as it references content in the article
         assert isinstance(is_valid, bool)
+
+
+class TestResponseValidatorUnnumbered:
+    """Test suite for ResponseValidator with unnumbered articles."""
+
+    @pytest.fixture
+    def sample_unnumbered_article(self):
+        """Sample article without numbered sections."""
+        return """
+# General Fitness Guidelines
+
+Regular physical activity is one of the most important things you can do for your health.
+
+## Benefits of Regular Exercise
+
+Adults who sit less and do any amount of moderate-to-vigorous physical activity gain some health benefits.
+
+## Getting Started
+
+If you're not active now, starting any amount of physical activity can begin to deliver health benefits.
+"""
+
+    @pytest.fixture
+    def unnumbered_validator(self, sample_unnumbered_article):
+        """Create a ResponseValidator instance for unnumbered articles."""
+        return ResponseValidator(sample_unnumbered_article, is_numbered=False)
+
+    def test_validator_initialization_unnumbered(self, sample_unnumbered_article):
+        """Test that validator initializes properly with is_numbered flag."""
+        validator = ResponseValidator(sample_unnumbered_article, is_numbered=False)
+        assert validator is not None
+        assert validator.is_numbered is False
+
+    def test_validate_response_unnumbered_no_citations(self, unnumbered_validator):
+        """Test that unnumbered articles pass validation without citations."""
+        response = "Regular exercise is beneficial for your health. It helps with weight management."
+        is_valid, errors = unnumbered_validator.validate_response(response)
+        assert is_valid is True
+        assert not errors
+
+    def test_validate_response_unnumbered_with_citations_still_valid(self, unnumbered_validator):
+        """Test that citations in unnumbered articles don't cause validation failure."""
+        response = "According to §1.1, exercise is good. But this article is unnumbered."
+        is_valid, errors = unnumbered_validator.validate_response(response)
+        # Should pass because we skip citation validation for unnumbered articles
+        assert is_valid is True
+        assert not errors
+
+    def test_validate_citations_skipped_for_unnumbered(self, unnumbered_validator):
+        """Test that citation validation is skipped for unnumbered articles."""
+        response = "This has fake §9.9.9 citations that don't exist."
+        is_valid, errors = unnumbered_validator.validate_citations(response)
+        # Should pass because citation validation is skipped
+        assert is_valid is True
+        assert not errors
+
+    def test_validate_length_still_applies_unnumbered(self, unnumbered_validator):
+        """Test that length validation still applies to unnumbered articles."""
+        response = "x" * 2300
+        is_valid, errors = unnumbered_validator.validate_length(response)
+        assert is_valid is False
+        assert len(errors) > 0
+
+    def test_extract_citations_still_works_unnumbered(self, unnumbered_validator):
+        """Test that citation extraction still works for unnumbered articles."""
+        text = "According to §1.1, exercise is good."
+        citations = unnumbered_validator.extract_citations(text)
+        assert "§1.1" in citations

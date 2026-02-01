@@ -16,7 +16,8 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 
 ```
 .
-├── articles/           # Source articles for debate responses
+├── articles/           # Source articles with numbered sections (§X.Y.Z)
+├── articles_unnumbered/ # Source articles without numbered sections
 ├── src/               # Core application code
 │   ├── config.py          # Configuration management
 │   ├── file_utils.py      # File utility functions
@@ -26,6 +27,8 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 │   ├── validator.py       # Response validation
 │   └── webhook_receiver.py # Webhook handling
 ├── templates/         # Prompt templates for LLM
+│   ├── debate_prompt.txt           # For numbered articles
+│   └── debate_prompt_unnumbered.txt # For unnumbered articles
 ├── tests/             # Test suite
 │   ├── unit/              # Unit tests
 │   ├── api/               # API tests with mocking
@@ -56,10 +59,13 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 
 4. **Article configuration:**
    - `ARTICLES_CONFIG` - JSON array with article configurations
+   - Each article can specify `is_numbered` (default: true)
+     - `is_numbered: true` - Article uses numbered sections (§X.Y.Z) and requires citations
+     - `is_numbered: false` - Article without numbered sections, no citations required
    ```json
    [
-     {"path": "articles/article1.md", "link": "https://example.com/article1"},
-     {"path": "articles/article2.md", "link": "https://example.com/article2"}
+     {"path": "articles/article1.md", "link": "https://example.com/article1", "is_numbered": true},
+     {"path": "articles_unnumbered/article2.md", "link": "https://example.com/article2", "is_numbered": false}
    ]
    ```
 
