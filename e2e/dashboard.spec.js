@@ -210,6 +210,29 @@ test.describe('Dashboard UI Tests', () => {
     const response = await request.get('/api/responses');
     const data = await response.json();
     expect(data.responses[0].generated_response).toBe('Edited response text');
+
+    // Now approve the edited response
+    await page.locator('#main-actions-log_001 .btn-approve').click();
+
+    // Wait for response to be updated
+    await page.waitForTimeout(500);
+
+    // Switch to approved filter to see the result
+    await page.locator('[data-filter="approved"]').click();
+    await page.waitForTimeout(200);
+
+    // Check the approved response is shown and has correct status
+    await expect(page.locator('.response-card')).toHaveCount(1);
+    await expect(page.locator('.response-id')).toContainText('log_001');
+    await expect(page.locator('.response-status')).toContainText('approved');
+
+    // Ensure the edited response text appears in the approved section
+    await expect(page.locator('.response-card .generated-response')).toContainText('Edited response text');
+
+    // Verify via API that status is approved
+    const resp2 = await request.get('/api/responses');
+    const data2 = await resp2.json();
+    expect(data2.responses[0].status).toBe('approved');
   });
 
   test('can filter responses by status', async ({ page, request }) => {
