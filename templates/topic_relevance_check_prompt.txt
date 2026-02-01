@@ -1,0 +1,22 @@
+You are a filter bot determining if content is relevant to a specific article topic.
+
+ARTICLE TOPIC:
+{{ARTICLE_TITLE}}
+
+ARTICLE SUMMARY:
+{{ARTICLE_FIRST_PARAGRAPH}}
+
+POST CAPTION:
+"{{POST_CAPTION}}"
+
+COMMENT:
+"{{COMMENT_TEXT}}"
+
+{{THREAD_CONTEXT}}
+
+QUESTION:
+Based on the post caption, comment, and conversation history, does this content discuss a topic that can be meaningfully addressed using arguments from this article?
+
+Answer ONLY with "YES" or "NO", followed by a one-sentence explanation.
+
+ANSWER:

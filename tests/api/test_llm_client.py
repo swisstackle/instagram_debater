@@ -171,3 +171,47 @@ class TestLLMClient:
             comment_text="Nice post!"
         )
         assert is_relevant is False
+
+    @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
+    def test_check_topic_relevance_yes(self, mock_openrouter, llm_client):
+        """Test checking topic relevance when answer is YES."""
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "YES - The content is relevant to this article."
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openrouter.return_value = mock_client
+
+        client = LLMClient(api_key="test", model_name="test")
+
+        is_relevant = client.check_topic_relevance(
+            article_title="Fitness Tips",
+            article_summary="This article discusses fitness",
+            post_caption="Great fitness advice!",
+            comment_text="What about squats?",
+            thread_context=""
+        )
+        assert is_relevant is True
+
+    @patch('src.llm_client.OpenRouter')
+    # pylint: disable=unused-argument
+    def test_check_topic_relevance_no(self, mock_openrouter, llm_client):
+        """Test checking topic relevance when answer is NO."""
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "NO - The content is not relevant."
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openrouter.return_value = mock_client
+
+        client = LLMClient(api_key="test", model_name="test")
+
+        is_relevant = client.check_topic_relevance(
+            article_title="Fitness Tips",
+            article_summary="This article discusses fitness",
+            post_caption="Cooking recipes",
+            comment_text="Where to buy ingredients?",
+            thread_context=""
+        )
+        assert is_relevant is False
