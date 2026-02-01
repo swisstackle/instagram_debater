@@ -1,9 +1,9 @@
 # RFC: Instagram Debate-Bot
 
-**Status:** Draft  
-**Author:** fparticle team  
-**Created:** 2026-01-31  
-**Last Updated:** 2026-01-31
+**Status:** Draft
+**Author:** fparticle team
+**Created:** 2026-01-31
+**Last Updated:** 2026-02-01
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### 1.1 What is the Instagram Debate-Bot?
 
-The Instagram Debate-Bot is a lightweight, stateless automation tool that engages with Instagram post commenters by presenting counter-arguments drawn exclusively from a single, locally-stored numbered Markdown article. The bot monitors comments on designated Instagram posts, identifies claims or statements that can be debated, and responds with relevant citations and arguments from the article.
+The Instagram Debate-Bot is a lightweight, stateless automation tool that engages with Instagram post commenters by presenting counter-arguments drawn from multiple locally-stored numbered Markdown articles. The bot monitors comments on designated Instagram posts, identifies claims or statements that can be debated, determines which article is most relevant, and responds with relevant citations and arguments from the selected article.
 
 ### 1.2 Purpose
 
@@ -19,9 +19,10 @@ This tool is designed to:
 - **Educate:** Share evidence-based arguments from curated articles with Instagram audiences
 - **Engage:** Foster meaningful debate and discussion in comment sections
 - **Scale:** Automate the process of responding to common misconceptions or opposing viewpoints
-- **Maintain Quality:** Ensure all responses are grounded in a single, vetted knowledge source
+- **Maintain Quality:** Ensure all responses are grounded in vetted knowledge sources
+- **Support Multiple Topics:** Select the most relevant article per comment from multiple sources
 
-The bot is intended for accounts that share educational or advocacy content and want to systematically engage with commenters using well-researched arguments.
+The bot is intended for accounts that share educational or advocacy content across multiple topics and want to systematically engage with commenters using well-researched arguments.
 
 ---
 
@@ -51,7 +52,7 @@ These constraints are **non-negotiable** and define the architecture:
 1. **NO DATABASE:** The system must not use any persistent database (SQL, NoSQL, or otherwise)
 2. **NO VECTOR STORE:** No embeddings, no semantic search, no vector databases (Pinecone, Chroma, FAISS, etc.)
 3. **FULL ARTICLE FEED:** The entire source article must be fed to the LLM on every run, along with all relevant comment context
-4. **SINGLE SOURCE:** Only one numbered Markdown article serves as the knowledge base per deployment
+4. **ARTICLE SELECTION:** System selects ONE most relevant article per comment from available sources
 5. **STATELESS OPERATION:** Each run of the bot must be independent and self-contained (except for audit logs)
 6. **FILE-BASED STATE:** Use simple JSON files on disk for tracking comments, pending responses, and audit logs
 
@@ -183,10 +184,10 @@ These constraints are **non-negotiable** and define the architecture:
 
 **Trigger:** Cron job every 5 minutes, or manual invocation
 
-1. **Load Article:**
-   - Read the Markdown article from `articles/` directory
-   - Parse to extract numbered sections (§1.1, §1.1.1, etc.)
-   - Store full text in memory for this run
+1. **Load Articles:**
+   - Read Markdown articles from `articles/` directory
+   - Parse each to extract numbered sections (§1.1, §1.1.1, etc.)
+   - Store all articles in memory for this run
 
 2. **Load Pending Comments:**
    - Read `pending_comments.json`
@@ -199,28 +200,24 @@ These constraints are **non-negotiable** and define the architecture:
    - Use Instagram Graph API to fetch:
      - Original post caption/text
      - Parent comment (if this is a reply)
-     - All sequential comments in the thread that came before the current comment (Instagram typically has one parent comment and then multiple sequential replies)
+     - All sequential comments in the thread
      - Previous bot responses in the same thread (if any)
    - Build conversation context string
 
-   **3.2 Post Topic Check (LLM Call):**
-   - First, verify the post is about the same topic as the article
-   - Prompt LLM: "Is this Instagram post about [article topic]? Post caption: [caption]"
-   - If NO → Skip all comments from this post, log reason
-   - If YES → Continue to comment relevance check
+   **3.2 Article Selection (LLM Call):**
+   - For each available article, check relevance
+   - Prompt LLM: "Is this content (post + comment + context) relevant to [article topic]?"
+   - Select first article that returns YES
+   - If NO articles match → Log to `no_match_log.json`, continue to next comment
+   - If article matches → Proceed to response generation
 
-   **3.3 Comment Relevance Check (LLM Call):**
-   - Prompt LLM: "Does this comment present a claim or question related to [article topic]?"
-   - If NO → Log to `no_match_log.json`, continue to next comment
-   - If YES → Proceed to response generation
-
-   **3.4 Generate Response:**
+   **3.3 Generate Response:**
    - Build prompt using template (see §8)
-   - Include: Full article, comment text, thread context
+   - Include: Selected article, comment text, thread context
    - Call LLM API via OpenRouter
    - Parse response
 
-   **3.5 Validate Response:**
+   **3.4 Validate Response:**
    - Check all citations exist in article (e.g., "§1.1.1" is a valid section)
    - Verify no hallucinated facts
    - Check character length (Instagram limit: 2,200 chars)
@@ -235,6 +232,11 @@ These constraints are **non-negotiable** and define the architecture:
        "comment_text": "...",
        "generated_response": "...",
        "citations_used": ["§1.1.1", "§2.3"],
+       "article_used": {
+         "path": "articles/article1.md",
+         "link": "https://example.com/article1",
+         "title": "Article Title"
+       },
        "token_count": 450,
        "timestamp": "...",
        "status": "approved" | "rejected" | "pending_review"

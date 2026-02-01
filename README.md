@@ -1,13 +1,14 @@
 # Instagram Debate-Bot
 
-An automated Instagram comment responder that engages with commenters using evidence-based arguments from a curated article.
+An automated Instagram comment responder that engages with commenters using evidence-based arguments from curated articles.
 
 ## Overview
 
 The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 - Monitors comments on designated Instagram posts
 - Identifies debatable claims using AI
-- Responds with relevant citations and arguments from a single source article
+- Selects the most relevant article from multiple sources
+- Responds with relevant citations and arguments from the selected article
 - Maintains transparency by identifying itself as a bot
 - Operates without persistent databases or vector stores
 
@@ -52,6 +53,19 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `INSTAGRAM_VERIFY_TOKEN` - Webhook verification token
    - `OPENROUTER_API_KEY` - OpenRouter API key for LLM access
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
+
+4. **Article configuration (choose one):**
+
+   **Option A: Multiple articles (recommended)**
+   - `ARTICLES_CONFIG` - JSON array with article configurations
+   ```json
+   [
+     {"path": "articles/article1.md", "link": "https://example.com/article1"},
+     {"path": "articles/article2.md", "link": "https://example.com/article2"}
+   ]
+   ```
+
+   **Option B: Single article (legacy)**
    - `ARTICLE_PATH` - Path to your source article
    - `ARTICLE_LINK` - URL to the online article
 
@@ -89,6 +103,7 @@ pytest --cov=src tests/
 
 2. **Comment Processor** (`processor.py`)
    - Loads pending comments
+   - Selects relevant article from multiple sources
    - Checks relevance using LLM
    - Generates responses with citations
    - Validates responses
@@ -101,6 +116,7 @@ pytest --cov=src tests/
 
 4. **LLM Client** (`llm_client.py`)
    - Generates debate responses
+   - Determines article relevance
    - Checks topic relevance
    - Checks comment relevance
 
@@ -114,7 +130,7 @@ pytest --cov=src tests/
 - **No Database**: Uses JSON files for state management
 - **No Vector Store**: Feeds full article to LLM each time
 - **Stateless**: Each run is independent
-- **Single Source**: One article per deployment
+- **Multiple Sources**: Supports multiple articles, selects most relevant per comment
 - **Zero Hallucination**: All responses cite article content
 - **Transparent**: Clearly identifies as a bot
 
