@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.file_utils import load_json_file, save_json_file
+from src.validator import ResponseValidator
 
 
 class CommentProcessor:
@@ -46,21 +47,23 @@ class CommentProcessor:
         Load multiple articles from configuration.
 
         Args:
-            articles_config: List of article configs with 'path' and 'link' keys
+            articles_config: List of article configs with 'path', 'link', and optional 'is_numbered' keys
 
         Returns:
-            List of article dictionaries with content, metadata, path, and link
+            List of article dictionaries with content, metadata, path, link, and is_numbered flag
         """
         articles = []
         for config in articles_config:
             content = self.load_article(config["path"])
             metadata = self.parse_article_metadata(content)
+            is_numbered = config.get("is_numbered", True)  # Default to True for backward compatibility
             articles.append({
                 "path": config["path"],
                 "link": config["link"],
                 "content": content,
                 "title": metadata["title"],
-                "summary": metadata["summary"]
+                "summary": metadata["summary"],
+                "is_numbered": is_numbered
             })
         return articles
 
@@ -140,7 +143,7 @@ class CommentProcessor:
         return None
 
     def process_comment(
-        self, comment: Dict[str, Any], article_text: str
+        self, comment: Dict[str, Any], article_text: str, is_numbered: bool = True
     ) -> Optional[Dict[str, Any]]:
         """
         Process a single comment and generate response.
@@ -148,6 +151,7 @@ class CommentProcessor:
         Args:
             comment: Comment data dictionary
             article_text: Full article text
+            is_numbered: Whether the article uses numbered sections (default: True)
 
         Returns:
             Result dictionary with response and metadata, or None if skipped
@@ -195,8 +199,11 @@ class CommentProcessor:
 
         response_text = self.llm_client.generate_response(prompt)
 
+        # Create validator with is_numbered flag
+        validator = ResponseValidator(article_text, is_numbered=is_numbered)
+        
         # Validate response
-        is_valid, errors = self.validator.validate_response(response_text)
+        is_valid, errors = validator.validate_response(response_text)
 
         if not is_valid:
             return {
@@ -206,7 +213,7 @@ class CommentProcessor:
             }
 
         # Extract citations
-        citations = self.validator.extract_citations(response_text)
+        citations = validator.extract_citations(response_text)
 
         result = {
             "comment_id": comment["comment_id"],
@@ -274,8 +281,14 @@ class CommentProcessor:
 
         response_text = self.llm_client.generate_response(prompt)
 
+        # Get is_numbered flag from selected article
+        is_numbered = selected_article.get("is_numbered", True)
+        
+        # Create validator with is_numbered flag
+        validator = ResponseValidator(selected_article["content"], is_numbered=is_numbered)
+
         # Validate response
-        is_valid, errors = self.validator.validate_response(response_text)
+        is_valid, errors = validator.validate_response(response_text)
 
         if not is_valid:
             return {
@@ -285,7 +298,7 @@ class CommentProcessor:
             }
 
         # Extract citations
-        citations = self.validator.extract_citations(response_text)
+        citations = validator.extract_citations(response_text)
 
         result = {
             "comment_id": comment["comment_id"],
@@ -477,10 +490,11 @@ class CommentProcessor:
                 return
 
             article_text = self.load_article(articles_config[0]["path"])
+            is_numbered = articles_config[0].get("is_numbered", True)
 
             for comment in comments:
                 print(f"Processing comment {comment.get('comment_id')}...")
-                result = self.process_comment(comment, article_text)
+                result = self.process_comment(comment, article_text, is_numbered=is_numbered)
 
                 if result:
                     self.save_audit_log(result)

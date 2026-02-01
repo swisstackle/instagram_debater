@@ -164,7 +164,7 @@ More text here.
             comments = processor.load_pending_comments()
             assert comments == []
 
-    def test_process_comment_success(self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client, mock_validator):
+    def test_process_comment_success(self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client, mock_validator):  # pylint: disable=unused-argument
         """Test successful comment processing."""
         result = processor.process_comment(sample_comment, sample_article)
 
@@ -182,8 +182,7 @@ More text here.
         mock_llm_client.check_post_topic_relevance.assert_called_once()
         mock_llm_client.check_comment_relevance.assert_called_once()
         mock_llm_client.generate_response.assert_called_once()
-        mock_validator.validate_response.assert_called_once()
-        mock_validator.extract_citations.assert_called_once()
+        # Note: validator is now created internally, so we don't check mock_validator
 
     def test_process_comment_post_not_relevant(self, processor, sample_comment, sample_article, mock_llm_client):
         """Test processing when post is not relevant to article topic."""
@@ -205,15 +204,17 @@ More text here.
             assert result is None
             mock_save.assert_called_once_with(sample_comment, "Comment not relevant to article topic")
 
-    def test_process_comment_validation_fails(self, processor, sample_comment, sample_article, mock_validator):
+    def test_process_comment_validation_fails(self, processor, sample_comment, sample_article, mock_validator):  # pylint: disable=unused-argument
         """Test processing when validation fails."""
-        mock_validator.validate_response.return_value = (False, ["Error 1", "Error 2"])
-
+        # Mock LLM to generate response with invalid citation
+        processor.llm_client.generate_response = Mock(return_value="Response with §9.9.9 invalid citation")
+        
         result = processor.process_comment(sample_comment, sample_article)
 
         assert result is not None
         assert result["status"] == "failed"
-        assert result["errors"] == ["Error 1", "Error 2"]
+        assert len(result["errors"]) > 0
+        assert "§9.9.9" in result["errors"][0]
 
     def test_process_comment_api_exception(self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client):
         """Test processing when Instagram API raises exception."""
@@ -746,13 +747,13 @@ More text here.
         assert selected is not None
         assert selected["title"] == "Article 1"
 
-    def test_process_comment_multi_article_with_selection(self, processor, sample_comment, mock_llm_client, mock_validator):
+    def test_process_comment_multi_article_with_selection(self, processor, sample_comment, mock_llm_client, mock_validator):  # pylint: disable=unused-argument
         """Test processing comment with multiple articles and article selection."""
         articles = [
             {
                 "path": "articles/article1.md",
                 "link": "https://example.com/article1",
-                "content": "# Article 1\n\n## §1. Section\n\nFitness content.",
+                "content": "# Article 1\n\n## §1. Section\n\n### §1.1 Subsection\n\nFitness content.",
                 "title": "Article 1",
                 "summary": "Fitness content."
             }
@@ -919,7 +920,7 @@ Exercise helps with weight management and reduces disease risk.
 
     def test_process_comment_multi_article_unnumbered(
         self, processor, sample_comment, sample_unnumbered_article,
-        mock_llm_client, mock_validator
+        mock_llm_client, mock_validator  # pylint: disable=unused-argument
     ):
         """Test processing comment with unnumbered article."""
         articles = [{
@@ -936,7 +937,5 @@ Exercise helps with weight management and reduces disease risk.
         assert result is not None
         assert result["comment_id"] == "comment_123"
         assert result["status"] in ["approved", "pending_review"]
-        # Verify validator was called with is_numbered flag
-        mock_validator.validate_response.assert_called_once()
-        # Citations should be empty for unnumbered articles
+        # Citations should be empty for unnumbered articles (no citations in generated response)
         assert result["citations_used"] == []
