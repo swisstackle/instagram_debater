@@ -84,9 +84,10 @@ class Config:
     def articles_config(self) -> List[Dict[str, str]]:
         """
         Get articles configuration (supports multiple articles).
-        
+
         Returns list of dicts with 'path' and 'link' keys.
         Falls back to legacy ARTICLE_PATH/ARTICLE_LINK if ARTICLES_CONFIG not set.
+        Returns empty list if JSON parsing fails or no configuration exists.
         """
         articles_json = os.getenv("ARTICLES_CONFIG")
 
