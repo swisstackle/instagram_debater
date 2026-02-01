@@ -2,14 +2,13 @@
 Test server for dashboard E2E testing.
 Includes mock Instagram API, OpenRouter API, and imports the dashboard app.
 """
-import json
 import os
-from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 import uvicorn
 
 from dashboard import create_dashboard_app
+from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
 
 # Create the main test server app
 app = FastAPI()
@@ -31,31 +30,19 @@ def get_pending_comments_path():
 
 def load_audit_log():
     """Load audit log from file."""
-    path = get_audit_log_path()
-    if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {"version": "1.0", "entries": []}
+    return load_json_file(get_audit_log_path(), {"version": "1.0", "entries": []})
 
 def save_audit_log(data):
     """Save audit log to file."""
-    path = get_audit_log_path()
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
+    save_json_file(get_audit_log_path(), data, ensure_dir=False)
 
 def load_pending_comments():
     """Load pending comments from file."""
-    path = get_pending_comments_path()
-    if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {"version": "1.0", "comments": []}
+    return load_json_file(get_pending_comments_path(), {"version": "1.0", "comments": []})
 
 def save_pending_comments(data):
     """Save pending comments to file."""
-    path = get_pending_comments_path()
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
+    save_json_file(get_pending_comments_path(), data, ensure_dir=False)
 
 # ================== MOCK INSTAGRAM API ==================
 mock_instagram_state = {
@@ -103,8 +90,8 @@ async def mock_trigger_webhook(request: Request):
         "username": data.get("username", "test_user"),
         "user_id": data.get("user_id", "user_123"),
         "text": data.get("text", "This is a test comment"),
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "received_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        "timestamp": get_utc_timestamp(),
+        "received_at": get_utc_timestamp()
     })
     save_pending_comments(pending)
     return {"status": "ok"}

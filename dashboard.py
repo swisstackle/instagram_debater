@@ -2,12 +2,13 @@
 Production dashboard server for Instagram Debate Bot.
 Provides a web interface to review and manage generated responses.
 """
-import json
 import os
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
+
+from src.file_utils import load_json_file, save_json_file
 
 
 def create_dashboard_app(state_dir: str = "state") -> FastAPI:
@@ -27,17 +28,10 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         return os.path.join(state_dir, "audit_log.json")
 
     def load_audit_log():
-        path = get_audit_log_path()
-        if os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {"version": "1.0", "entries": []}
+        return load_json_file(get_audit_log_path(), {"version": "1.0", "entries": []})
 
     def save_audit_log(data):
-        os.makedirs(state_dir, exist_ok=True)
-        path = get_audit_log_path()
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+        save_json_file(get_audit_log_path(), data)
 
     # ================== DASHBOARD API ==================
     @app.get("/api/responses")

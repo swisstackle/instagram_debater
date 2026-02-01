@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from src.file_utils import load_json_file, save_json_file
+
 
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
@@ -81,13 +83,7 @@ class CommentProcessor:
             List of pending comment dictionaries
         """
         pending_file = os.path.join("state", "pending_comments.json")
-
-        if not os.path.exists(pending_file):
-            return []
-
-        with open(pending_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
+        data = load_json_file(pending_file, {"version": "1.0", "comments": []})
         return data.get("comments", [])
 
     def process_comment(
@@ -303,11 +299,8 @@ class CommentProcessor:
     def clear_pending_comments(self) -> None:
         """Clear processed comments from pending list."""
         pending_file = os.path.join("state", "pending_comments.json")
-
         if os.path.exists(pending_file):
-            data = {"version": "1.0", "comments": []}
-            with open(pending_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
+            save_json_file(pending_file, {"version": "1.0", "comments": []}, ensure_dir=False)
 
     def run(self) -> None:
         """Main processing loop entry point."""

@@ -132,15 +132,15 @@ More content here.
 More text here.
 """
         metadata = processor.parse_article_metadata(article_text)
-        assert metadata["title"] == ""
+        assert not metadata["title"]
         assert metadata["summary"] == "This is just content without a title."
 
     def test_parse_article_metadata_empty(self, processor):
         """Test parsing empty article."""
         article_text = ""
         metadata = processor.parse_article_metadata(article_text)
-        assert metadata["title"] == ""
-        assert metadata["summary"] == ""
+        assert not metadata["title"]
+        assert not metadata["summary"]
 
     def test_load_pending_comments_file_exists(self, processor):
         """Test loading pending comments when file exists."""
@@ -256,7 +256,7 @@ More text here.
 
         context = processor.build_thread_context("comment_123", "post_456")
 
-        assert context == ""
+        assert not context
 
     def test_build_thread_context_api_exception(self, processor, mock_instagram_api):
         """Test building thread context when API raises exception."""
@@ -264,7 +264,7 @@ More text here.
 
         context = processor.build_thread_context("comment_123", "post_456")
 
-        assert context == ""
+        assert not context
 
     def test_build_thread_context_limits_to_five_replies(self, processor, mock_instagram_api):
         """Test that thread context limits to 5 most recent replies."""
@@ -291,7 +291,7 @@ More text here.
 
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=False):
-                with patch("builtins.open", mock_open()) as mock_file:
+                with patch("builtins.open", mock_open()) as _mock_file:
                     with patch("json.dump") as mock_json_dump:
                         processor.save_audit_log(log_entry)
 
@@ -317,7 +317,7 @@ More text here.
 
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=True):
-                with patch("builtins.open", mock_open(read_data=json.dumps(existing_data))) as mock_file:
+                with patch("builtins.open", mock_open(read_data=json.dumps(existing_data))) as _mock_file:
                     with patch("json.dump") as mock_json_dump:
                         processor.save_audit_log(log_entry)
 
@@ -337,7 +337,7 @@ More text here.
 
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=False):
-                with patch("builtins.open", mock_open()) as mock_file:
+                with patch("builtins.open", mock_open()) as _mock_file:
                     with patch("json.dump") as mock_json_dump:
                         processor.save_no_match_log(comment, "Not relevant")
 
@@ -512,7 +512,7 @@ More text here.
     def test_clear_pending_comments_file_exists(self, processor):
         """Test clearing pending comments when file exists."""
         with patch("os.path.exists", return_value=True):
-            with patch("builtins.open", mock_open()) as mock_file:
+            with patch("builtins.open", mock_open()) as _mock_file:
                 with patch("json.dump") as mock_json_dump:
                     processor.clear_pending_comments()
 

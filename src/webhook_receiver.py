@@ -2,12 +2,12 @@
 Webhook receiver for Instagram comment notifications.
 Handles webhook verification and incoming comment data.
 """
-import json
 import os
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Request, Response, Query, HTTPException
+
+from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
 
 
 app = FastAPI()
@@ -90,8 +90,8 @@ class WebhookReceiver:
                     "username": value.get("from", {}).get("username"),
                     "user_id": value.get("from", {}).get("id"),
                     "text": value.get("text"),
-                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "received_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                    "timestamp": get_utc_timestamp(),
+                    "received_at": get_utc_timestamp()
                 }
                 return comment_data
 
@@ -110,19 +110,12 @@ class WebhookReceiver:
 
         pending_file = os.path.join(state_dir, "pending_comments.json")
 
-        # Load existing data
-        if os.path.exists(pending_file):
-            with open(pending_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        else:
-            data = {"version": "1.0", "comments": []}
-
-        # Add new comment
+        # Load existing data and add new comment
+        data = load_json_file(pending_file, {"version": "1.0", "comments": []})
         data["comments"].append(comment_data)
 
         # Save back
-        with open(pending_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+        save_json_file(pending_file, data)
 
 
 @app.get("/webhook/instagram")
