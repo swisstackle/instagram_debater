@@ -14,26 +14,26 @@ def main():
     """Main entry point for the bot."""
     # Load configuration
     config = Config()
-    
+
     # Initialize components
     instagram_api = InstagramAPI(
         access_token=config.instagram_access_token,
         app_secret=config.instagram_app_secret
     )
-    
+
     llm_client = LLMClient(
         api_key=config.openrouter_api_key,
         model_name=config.model_name,
         max_tokens=config.max_tokens,
         temperature=config.temperature
     )
-    
+
     # Load article for validator
     with open(config.article_path, 'r') as f:
         article_text = f.read()
-    
+
     validator = ResponseValidator(article_text)
-    
+
     # Create processor
     processor = CommentProcessor(
         instagram_api=instagram_api,
@@ -41,7 +41,7 @@ def main():
         validator=validator,
         config=config
     )
-    
+
     # Run processing
     processor.run()
 

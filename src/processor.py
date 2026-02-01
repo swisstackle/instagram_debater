@@ -11,11 +11,11 @@ from datetime import datetime, timezone
 
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
-    
+
     def __init__(self, instagram_api, llm_client, validator, config):
         """
         Initialize comment processor.
-        
+
         Args:
             instagram_api: InstagramAPI instance
             llm_client: LLMClient instance
@@ -26,40 +26,40 @@ class CommentProcessor:
         self.llm_client = llm_client
         self.validator = validator
         self.config = config
-    
+
     def load_article(self, article_path: str) -> str:
         """
         Load article content from file.
-        
+
         Args:
             article_path: Path to article file
-            
+
         Returns:
             Article text content
         """
         with open(article_path, 'r') as f:
             return f.read()
-    
+
     def parse_article_metadata(self, article_text: str) -> Dict[str, str]:
         """
         Parse article title and summary from content.
-        
+
         Args:
             article_text: Full article text
-            
+
         Returns:
             Dictionary with 'title' and 'summary' keys
         """
         lines = article_text.split('\n')
         title = ""
         summary = ""
-        
+
         # Find first # heading as title
         for line in lines:
             if line.startswith('# '):
                 title = line[2:].strip()
                 break
-        
+
         # Get first paragraph as summary (first non-empty line after headers)
         in_content = False
         for line in lines:
@@ -68,67 +68,67 @@ class CommentProcessor:
             if in_content and line.strip() and not line.startswith('#'):
                 summary = line.strip()
                 break
-        
+
         return {
             "title": title,
             "summary": summary
         }
-    
+
     def load_pending_comments(self) -> List[Dict[str, Any]]:
         """
         Load pending comments from JSON file.
-        
+
         Returns:
             List of pending comment dictionaries
         """
         pending_file = os.path.join("state", "pending_comments.json")
-        
+
         if not os.path.exists(pending_file):
             return []
-        
+
         with open(pending_file, 'r') as f:
             data = json.load(f)
-        
+
         return data.get("comments", [])
-    
+
     def process_comment(self, comment: Dict[str, Any], article_text: str) -> Optional[Dict[str, Any]]:
         """
         Process a single comment and generate response.
-        
+
         Args:
             comment: Comment data dictionary
             article_text: Full article text
-            
+
         Returns:
             Result dictionary with response and metadata, or None if skipped
         """
         # Parse article metadata
         metadata = self.parse_article_metadata(article_text)
-        
+
         # Check if post is relevant to article topic
         try:
             post_caption = self.instagram_api.get_post_caption(comment["post_id"])
         except Exception:
             post_caption = ""
-        
+
         if post_caption and not self.llm_client.check_post_topic_relevance(
             metadata["title"], metadata["summary"], post_caption
         ):
             return None
-        
+
         # Check if comment is relevant
         if not self.llm_client.check_comment_relevance(
             metadata["title"], metadata["summary"], comment["text"]
         ):
             self.save_no_match_log(comment, "Comment not relevant to article topic")
             return None
-        
+
         # Build thread context
         thread_context = self.build_thread_context(
-            comment["comment_id"], 
+            comment["comment_id"],
             comment["post_id"]
         )
-        
+
         # Generate response using LLM
         template = self.llm_client.load_template("debate_prompt.txt")
         prompt = self.llm_client.fill_template(template, {
@@ -139,22 +139,22 @@ class CommentProcessor:
             "COMMENT_TEXT": comment["text"],
             "THREAD_CONTEXT": f"\nPREVIOUS DISCUSSION IN THIS THREAD:\n{thread_context}" if thread_context else ""
         })
-        
+
         response_text = self.llm_client.generate_response(prompt)
-        
+
         # Validate response
         is_valid, errors = self.validator.validate_response(response_text)
-        
+
         if not is_valid:
             return {
                 "comment_id": comment["comment_id"],
                 "status": "failed",
                 "errors": errors
             }
-        
+
         # Extract citations
         citations = self.validator.extract_citations(response_text)
-        
+
         result = {
             "comment_id": comment["comment_id"],
             "comment_text": comment["text"],
@@ -165,17 +165,17 @@ class CommentProcessor:
             "validation_passed": True,
             "validation_errors": []
         }
-        
+
         return result
-    
+
     def build_thread_context(self, comment_id: str, post_id: str) -> str:
         """
         Build conversation context for a comment.
-        
+
         Args:
             comment_id: Comment ID
             post_id: Post ID
-            
+
         Returns:
             Formatted thread context string
         """
@@ -190,54 +190,54 @@ class CommentProcessor:
                 return "\n".join(context_lines)
         except Exception:
             pass
-        
+
         return ""
-    
+
     def save_audit_log(self, log_entry: Dict[str, Any]) -> None:
         """
         Save processing result to audit log.
-        
+
         Args:
             log_entry: Log entry data
         """
         os.makedirs("state", exist_ok=True)
         audit_file = os.path.join("state", "audit_log.json")
-        
+
         # Load existing log
         if os.path.exists(audit_file):
             with open(audit_file, 'r') as f:
                 data = json.load(f)
         else:
             data = {"version": "1.0", "entries": []}
-        
+
         # Add entry ID
         log_entry["id"] = f"log_{len(data['entries']) + 1:03d}"
-        
+
         # Append entry
         data["entries"].append(log_entry)
-        
+
         # Save
         with open(audit_file, 'w') as f:
             json.dump(data, f, indent=2)
-    
+
     def save_no_match_log(self, comment: Dict[str, Any], reason: str) -> None:
         """
         Save non-matching comment to no_match_log.
-        
+
         Args:
             comment: Comment data
             reason: Reason for not matching
         """
         os.makedirs("state", exist_ok=True)
         no_match_file = os.path.join("state", "no_match_log.json")
-        
+
         # Load existing log
         if os.path.exists(no_match_file):
             with open(no_match_file, 'r') as f:
                 data = json.load(f)
         else:
             data = {"version": "1.0", "entries": []}
-        
+
         # Create entry
         entry = {
             "id": f"nomatch_{len(data['entries']) + 1:03d}",
@@ -248,27 +248,27 @@ class CommentProcessor:
             "reason": reason,
             "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         }
-        
+
         # Append and save
         data["entries"].append(entry)
-        
+
         with open(no_match_file, 'w') as f:
             json.dump(data, f, indent=2)
-    
+
     def post_approved_responses(self) -> None:
         """Post all approved responses to Instagram.
-        
-        Posts any response with status='approved' and posted=False, regardless of 
-        AUTO_POST_ENABLED setting. This allows manually approved responses from the 
+
+        Posts any response with status='approved' and posted=False, regardless of
+        AUTO_POST_ENABLED setting. This allows manually approved responses from the
         dashboard to be posted by the processor.
         """
         audit_file = os.path.join("state", "audit_log.json")
         if not os.path.exists(audit_file):
             return
-        
+
         with open(audit_file, 'r') as f:
             data = json.load(f)
-        
+
         for entry in data["entries"]:
             if entry.get("status") == "approved" and not entry.get("posted", False):
                 try:
@@ -277,63 +277,63 @@ class CommentProcessor:
                         entry["comment_id"],
                         entry["generated_response"]
                     )
-                    
+
                     # Update entry
                     entry["posted"] = True
                     entry["posted_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                    
+
                     # Save posted ID
                     posted_file = os.path.join("state", "posted_ids.txt")
                     with open(posted_file, 'a') as f:
                         f.write(entry["comment_id"] + "\n")
-                        
+
                 except Exception as e:
                     entry["post_error"] = str(e)
-        
+
         # Save updated audit log
         with open(audit_file, 'w') as f:
             json.dump(data, f, indent=2)
-    
+
     def clear_pending_comments(self) -> None:
         """Clear processed comments from pending list."""
         pending_file = os.path.join("state", "pending_comments.json")
-        
+
         if os.path.exists(pending_file):
             data = {"version": "1.0", "comments": []}
             with open(pending_file, 'w') as f:
                 json.dump(data, f, indent=2)
-    
+
     def run(self) -> None:
         """Main processing loop entry point."""
         # Load article
         article_text = self.load_article(self.config.article_path)
-        
+
         # Load pending comments
         comments = self.load_pending_comments()
-        
+
         if not comments:
             print("No pending comments to process")
             return
-        
+
         print(f"Processing {len(comments)} pending comment(s)...")
-        
+
         # Process each comment
         for comment in comments:
             print(f"Processing comment {comment.get('comment_id')}...")
-            
+
             result = self.process_comment(comment, article_text)
-            
+
             if result:
                 self.save_audit_log(result)
                 print(f"  - Generated response, status: {result.get('status')}")
             else:
                 print(f"  - Skipped (not relevant)")
-        
+
         # Post approved responses (both auto-approved and manually approved)
         print("Posting approved responses...")
         self.post_approved_responses()
-        
+
         # Clear pending comments
         self.clear_pending_comments()
-        
+
         print("Processing complete!")

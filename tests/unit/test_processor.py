@@ -13,7 +13,7 @@ from src.processor import CommentProcessor
 
 class TestCommentProcessor:
     """Test suite for CommentProcessor class."""
-    
+
     @pytest.fixture
     def mock_instagram_api(self):
         """Create a mock Instagram API."""
@@ -22,7 +22,7 @@ class TestCommentProcessor:
         mock_api.get_comment_replies.return_value = []
         mock_api.post_reply.return_value = {"id": "reply_123"}
         return mock_api
-    
+
     @pytest.fixture
     def mock_llm_client(self):
         """Create a mock LLM client."""
@@ -33,7 +33,7 @@ class TestCommentProcessor:
         mock_llm.fill_template.return_value = "Filled template"
         mock_llm.generate_response.return_value = "Generated response with §1.1 citation"
         return mock_llm
-    
+
     @pytest.fixture
     def mock_validator(self):
         """Create a mock response validator."""
@@ -41,7 +41,7 @@ class TestCommentProcessor:
         mock_val.validate_response.return_value = (True, [])
         mock_val.extract_citations.return_value = ["§1.1"]
         return mock_val
-    
+
     @pytest.fixture
     def mock_config(self):
         """Create a mock config."""
@@ -49,7 +49,7 @@ class TestCommentProcessor:
         mock_cfg.auto_post_enabled = False
         mock_cfg.article_path = "articles/test.md"
         return mock_cfg
-    
+
     @pytest.fixture
     def processor(self, mock_instagram_api, mock_llm_client, mock_validator, mock_config):
         """Create a CommentProcessor instance with mocked dependencies."""
@@ -59,7 +59,7 @@ class TestCommentProcessor:
             mock_validator,
             mock_config
         )
-    
+
     @pytest.fixture
     def temp_state_dir(self):
         """Create a temporary state directory."""
@@ -68,7 +68,7 @@ class TestCommentProcessor:
         os.makedirs(state_dir, exist_ok=True)
         yield state_dir
         shutil.rmtree(temp_dir)
-    
+
     @pytest.fixture
     def sample_article(self):
         """Sample article content."""
@@ -84,7 +84,7 @@ This is a test article about fitness.
 
 Research shows that exercise is beneficial.
 """
-    
+
     @pytest.fixture
     def sample_comment(self):
         """Sample comment data."""
@@ -94,21 +94,21 @@ Research shows that exercise is beneficial.
             "username": "testuser",
             "text": "What do you think about this topic?"
         }
-    
+
     def test_processor_initialization(self, processor, mock_instagram_api, mock_llm_client, mock_validator, mock_config):
         """Test that processor initializes properly with dependencies."""
         assert processor.instagram_api == mock_instagram_api
         assert processor.llm_client == mock_llm_client
         assert processor.validator == mock_validator
         assert processor.config == mock_config
-    
+
     def test_load_article(self, processor):
         """Test loading article from file."""
         article_content = "# Test Article\n\nContent here."
         with patch("builtins.open", mock_open(read_data=article_content)):
             result = processor.load_article("articles/test.md")
             assert result == article_content
-    
+
     def test_parse_article_metadata_with_title_and_summary(self, processor):
         """Test parsing article metadata with title and summary."""
         article_text = """# Article Title
@@ -122,7 +122,7 @@ More content here.
         metadata = processor.parse_article_metadata(article_text)
         assert metadata["title"] == "Article Title"
         assert metadata["summary"] == "This is the first paragraph summary."
-    
+
     def test_parse_article_metadata_no_title(self, processor):
         """Test parsing article without title."""
         article_text = """This is just content without a title.
@@ -132,14 +132,14 @@ More text here.
         metadata = processor.parse_article_metadata(article_text)
         assert metadata["title"] == ""
         assert metadata["summary"] == "This is just content without a title."
-    
+
     def test_parse_article_metadata_empty(self, processor):
         """Test parsing empty article."""
         article_text = ""
         metadata = processor.parse_article_metadata(article_text)
         assert metadata["title"] == ""
         assert metadata["summary"] == ""
-    
+
     def test_load_pending_comments_file_exists(self, processor):
         """Test loading pending comments when file exists."""
         pending_data = {
@@ -155,17 +155,17 @@ More text here.
                 assert len(comments) == 2
                 assert comments[0]["comment_id"] == "c1"
                 assert comments[1]["comment_id"] == "c2"
-    
+
     def test_load_pending_comments_file_not_exists(self, processor):
         """Test loading pending comments when file doesn't exist."""
         with patch("os.path.exists", return_value=False):
             comments = processor.load_pending_comments()
             assert comments == []
-    
+
     def test_process_comment_success(self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client, mock_validator):
         """Test successful comment processing."""
         result = processor.process_comment(sample_comment, sample_article)
-        
+
         assert result is not None
         assert result["comment_id"] == "comment_123"
         assert result["comment_text"] == "What do you think about this topic?"
@@ -174,7 +174,7 @@ More text here.
         assert result["status"] == "pending_review"
         assert result["validation_passed"] is True
         assert result["validation_errors"] == []
-        
+
         # Verify mocks were called
         mock_instagram_api.get_post_caption.assert_called_once_with("post_456")
         mock_llm_client.check_post_topic_relevance.assert_called_once()
@@ -182,57 +182,57 @@ More text here.
         mock_llm_client.generate_response.assert_called_once()
         mock_validator.validate_response.assert_called_once()
         mock_validator.extract_citations.assert_called_once()
-    
+
     def test_process_comment_post_not_relevant(self, processor, sample_comment, sample_article, mock_llm_client):
         """Test processing when post is not relevant to article topic."""
         mock_llm_client.check_post_topic_relevance.return_value = False
-        
+
         result = processor.process_comment(sample_comment, sample_article)
-        
+
         assert result is None
         # Should not check comment relevance if post is not relevant
         mock_llm_client.check_comment_relevance.assert_not_called()
-    
+
     def test_process_comment_comment_not_relevant(self, processor, sample_comment, sample_article, mock_llm_client):
         """Test processing when comment is not relevant."""
         mock_llm_client.check_comment_relevance.return_value = False
-        
+
         with patch.object(processor, 'save_no_match_log') as mock_save:
             result = processor.process_comment(sample_comment, sample_article)
-            
+
             assert result is None
             mock_save.assert_called_once_with(sample_comment, "Comment not relevant to article topic")
-    
+
     def test_process_comment_validation_fails(self, processor, sample_comment, sample_article, mock_validator):
         """Test processing when validation fails."""
         mock_validator.validate_response.return_value = (False, ["Error 1", "Error 2"])
-        
+
         result = processor.process_comment(sample_comment, sample_article)
-        
+
         assert result is not None
         assert result["status"] == "failed"
         assert result["errors"] == ["Error 1", "Error 2"]
-    
+
     def test_process_comment_api_exception(self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client):
         """Test processing when Instagram API raises exception."""
         mock_instagram_api.get_post_caption.side_effect = Exception("API Error")
-        
+
         # Should still process with empty post caption
         result = processor.process_comment(sample_comment, sample_article)
-        
+
         assert result is not None
         # Should call check_comment_relevance even if get_post_caption fails
         mock_llm_client.check_comment_relevance.assert_called_once()
-    
+
     def test_process_comment_auto_post_enabled(self, processor, sample_comment, sample_article, mock_config):
         """Test processing with auto-post enabled."""
         mock_config.auto_post_enabled = True
-        
+
         result = processor.process_comment(sample_comment, sample_article)
-        
+
         assert result is not None
         assert result["status"] == "approved"
-    
+
     def test_build_thread_context_with_replies(self, processor, mock_instagram_api):
         """Test building thread context with replies."""
         mock_instagram_api.get_comment_replies.return_value = [
@@ -240,30 +240,30 @@ More text here.
             {"from": {"username": "user2"}, "text": "Reply 2"},
             {"from": {"username": "user3"}, "text": "Reply 3"}
         ]
-        
+
         context = processor.build_thread_context("comment_123", "post_456")
-        
+
         assert "@user1: Reply 1" in context
         assert "@user2: Reply 2" in context
         assert "@user3: Reply 3" in context
         mock_instagram_api.get_comment_replies.assert_called_once_with("comment_123")
-    
+
     def test_build_thread_context_no_replies(self, processor, mock_instagram_api):
         """Test building thread context with no replies."""
         mock_instagram_api.get_comment_replies.return_value = []
-        
+
         context = processor.build_thread_context("comment_123", "post_456")
-        
+
         assert context == ""
-    
+
     def test_build_thread_context_api_exception(self, processor, mock_instagram_api):
         """Test building thread context when API raises exception."""
         mock_instagram_api.get_comment_replies.side_effect = Exception("API Error")
-        
+
         context = processor.build_thread_context("comment_123", "post_456")
-        
+
         assert context == ""
-    
+
     def test_build_thread_context_limits_to_five_replies(self, processor, mock_instagram_api):
         """Test that thread context limits to 5 most recent replies."""
         replies = [
@@ -271,13 +271,13 @@ More text here.
             for i in range(10)
         ]
         mock_instagram_api.get_comment_replies.return_value = replies
-        
+
         context = processor.build_thread_context("comment_123", "post_456")
-        
+
         # Should only include first 5
         lines = context.split("\n")
         assert len(lines) == 5
-    
+
     def test_save_audit_log_new_file(self, processor, temp_state_dir):
         """Test saving audit log when file doesn't exist."""
         log_entry = {
@@ -285,19 +285,19 @@ More text here.
             "status": "approved",
             "generated_response": "Test response"
         }
-        
+
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=False):
                 with patch("builtins.open", mock_open()) as mock_file:
                     with patch("json.dump") as mock_json_dump:
                         processor.save_audit_log(log_entry)
-                        
+
                         # Check that entry was given an ID
                         call_args = mock_json_dump.call_args[0][0]
                         assert "entries" in call_args
                         assert len(call_args["entries"]) == 1
                         assert call_args["entries"][0]["id"] == "log_001"
-    
+
     def test_save_audit_log_existing_file(self, processor):
         """Test saving audit log when file exists."""
         existing_data = {
@@ -306,23 +306,23 @@ More text here.
                 {"id": "log_001", "comment_id": "old_comment"}
             ]
         }
-        
+
         log_entry = {
             "comment_id": "comment_123",
             "status": "approved"
         }
-        
+
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=True):
                 with patch("builtins.open", mock_open(read_data=json.dumps(existing_data))) as mock_file:
                     with patch("json.dump") as mock_json_dump:
                         processor.save_audit_log(log_entry)
-                        
+
                         # Check that entry was appended with correct ID
                         call_args = mock_json_dump.call_args[0][0]
                         assert len(call_args["entries"]) == 2
                         assert call_args["entries"][1]["id"] == "log_002"
-    
+
     def test_save_no_match_log_new_file(self, processor):
         """Test saving no-match log when file doesn't exist."""
         comment = {
@@ -331,20 +331,20 @@ More text here.
             "username": "testuser",
             "text": "Test comment"
         }
-        
+
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=False):
                 with patch("builtins.open", mock_open()) as mock_file:
                     with patch("json.dump") as mock_json_dump:
                         processor.save_no_match_log(comment, "Not relevant")
-                        
+
                         call_args = mock_json_dump.call_args[0][0]
                         assert len(call_args["entries"]) == 1
                         entry = call_args["entries"][0]
                         assert entry["id"] == "nomatch_001"
                         assert entry["comment_id"] == "comment_123"
                         assert entry["reason"] == "Not relevant"
-    
+
     def test_save_no_match_log_existing_file(self, processor):
         """Test saving no-match log when file exists."""
         existing_data = {
@@ -353,32 +353,32 @@ More text here.
                 {"id": "nomatch_001", "comment_id": "old_comment"}
             ]
         }
-        
+
         comment = {
             "comment_id": "comment_123",
             "post_id": "post_456",
             "username": "testuser",
             "text": "Test comment"
         }
-        
+
         with patch("os.makedirs"):
             with patch("os.path.exists", return_value=True):
                 with patch("builtins.open", mock_open(read_data=json.dumps(existing_data))):
                     with patch("json.dump") as mock_json_dump:
                         processor.save_no_match_log(comment, "Not relevant")
-                        
+
                         call_args = mock_json_dump.call_args[0][0]
                         assert len(call_args["entries"]) == 2
                         assert call_args["entries"][1]["id"] == "nomatch_002"
-    
+
     def test_post_approved_responses_auto_post_disabled_with_approved(self, processor, mock_config, mock_instagram_api):
         """Test posting approved responses when auto-post is disabled.
-        
+
         This test verifies that approved responses are posted even when AUTO_POST_ENABLED is false.
         This allows manually approved responses from the dashboard to be posted by the processor.
         """
         mock_config.auto_post_enabled = False
-        
+
         audit_data = {
             "version": "1.0",
             "entries": [
@@ -390,38 +390,38 @@ More text here.
                 }
             ]
         }
-        
+
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
                 with patch("json.dump") as mock_json_dump:
                     processor.post_approved_responses()
-                    
+
                     # Should post approved responses even when auto-post is disabled
                     mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
-                    
+
                     # Check that data was updated
                     call_args = mock_json_dump.call_args[0][0]
                     assert call_args["entries"][0]["posted"] is True
                     assert "posted_at" in call_args["entries"][0]
-    
+
     def test_post_approved_responses_no_audit_file(self, processor, mock_config):
         """Test posting responses when audit file doesn't exist."""
         # AUTO_POST_ENABLED setting should not matter here
         mock_config.auto_post_enabled = True
-        
+
         with patch("os.path.exists", return_value=False):
             processor.post_approved_responses()
-            
+
             processor.instagram_api.post_reply.assert_not_called()
-    
+
     def test_post_approved_responses_success(self, processor, mock_config, mock_instagram_api):
         """Test successfully posting approved responses.
-        
+
         AUTO_POST_ENABLED should not affect posting of already approved responses.
         """
         # Set to False to emphasize that AUTO_POST_ENABLED doesn't affect approved response posting
         mock_config.auto_post_enabled = False
-        
+
         audit_data = {
             "version": "1.0",
             "entries": [
@@ -439,25 +439,25 @@ More text here.
                 }
             ]
         }
-        
+
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
                 with patch("json.dump") as mock_json_dump:
                     processor.post_approved_responses()
-                    
+
                     # Should only post the approved one
                     mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
-                    
+
                     # Check that data was updated
                     call_args = mock_json_dump.call_args[0][0]
                     assert call_args["entries"][0]["posted"] is True
                     assert "posted_at" in call_args["entries"][0]
-    
+
     def test_post_approved_responses_already_posted(self, processor, mock_config, mock_instagram_api):
         """Test posting responses when already posted."""
         # AUTO_POST_ENABLED should not matter for already posted responses
         mock_config.auto_post_enabled = False
-        
+
         audit_data = {
             "version": "1.0",
             "entries": [
@@ -469,21 +469,21 @@ More text here.
                 }
             ]
         }
-        
+
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
                 with patch("json.dump"):
                     processor.post_approved_responses()
-                    
+
                     # Should not post again
                     mock_instagram_api.post_reply.assert_not_called()
-    
+
     def test_post_approved_responses_api_exception(self, processor, mock_config, mock_instagram_api):
         """Test posting responses when API raises exception."""
         # AUTO_POST_ENABLED should not affect error handling
         mock_config.auto_post_enabled = False
         mock_instagram_api.post_reply.side_effect = Exception("API Error")
-        
+
         audit_data = {
             "version": "1.0",
             "entries": [
@@ -495,48 +495,48 @@ More text here.
                 }
             ]
         }
-        
+
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
                 with patch("json.dump") as mock_json_dump:
                     processor.post_approved_responses()
-                    
+
                     # Check that error was recorded
                     call_args = mock_json_dump.call_args[0][0]
                     assert "post_error" in call_args["entries"][0]
                     assert call_args["entries"][0]["post_error"] == "API Error"
-    
+
     def test_clear_pending_comments_file_exists(self, processor):
         """Test clearing pending comments when file exists."""
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open()) as mock_file:
                 with patch("json.dump") as mock_json_dump:
                     processor.clear_pending_comments()
-                    
+
                     # Check that file was cleared
                     call_args = mock_json_dump.call_args[0][0]
                     assert call_args["version"] == "1.0"
                     assert call_args["comments"] == []
-    
+
     def test_clear_pending_comments_file_not_exists(self, processor):
         """Test clearing pending comments when file doesn't exist."""
         with patch("os.path.exists", return_value=False):
             # Should handle gracefully without error
             processor.clear_pending_comments()
-    
+
     def test_run_no_comments(self, processor, sample_article, capsys):
         """Test run method with no pending comments."""
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=[]):
                 processor.run()
-                
+
                 captured = capsys.readouterr()
                 assert "No pending comments to process" in captured.out
-    
+
     def test_run_with_comments(self, processor, sample_article, sample_comment, capsys):
         """Test run method with pending comments."""
         comments = [sample_comment]
-        
+
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=comments):
                 with patch.object(processor, 'process_comment', return_value={
@@ -547,37 +547,37 @@ More text here.
                         with patch.object(processor, 'post_approved_responses') as mock_post:
                             with patch.object(processor, 'clear_pending_comments'):
                                 processor.run()
-                                
+
                                 captured = capsys.readouterr()
                                 assert "Processing 1 pending comment(s)" in captured.out
                                 assert "Generated response" in captured.out
                                 # Should always call post_approved_responses
                                 mock_post.assert_called_once()
-    
+
     def test_run_with_skipped_comment(self, processor, sample_article, sample_comment, capsys):
         """Test run method with skipped comment."""
         comments = [sample_comment]
-        
+
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=comments):
                 with patch.object(processor, 'process_comment', return_value=None):
                     with patch.object(processor, 'post_approved_responses') as mock_post:
                         with patch.object(processor, 'clear_pending_comments'):
                             processor.run()
-                            
+
                             captured = capsys.readouterr()
                             assert "Skipped (not relevant)" in captured.out
                             # Should still call post_approved_responses
                             mock_post.assert_called_once()
-    
+
     def test_run_with_auto_post_enabled(self, processor, sample_article, sample_comment, mock_config, capsys):
         """Test run method with auto-post enabled.
-        
+
         When AUTO_POST_ENABLED is true, responses should be auto-approved and then posted.
         """
         mock_config.auto_post_enabled = True
         comments = [sample_comment]
-        
+
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=comments):
                 with patch.object(processor, 'process_comment', return_value={
@@ -588,20 +588,20 @@ More text here.
                         with patch.object(processor, 'post_approved_responses') as mock_post:
                             with patch.object(processor, 'clear_pending_comments'):
                                 processor.run()
-                                
+
                                 captured = capsys.readouterr()
                                 assert "Posting approved responses" in captured.out
                                 mock_post.assert_called_once()
-    
+
     def test_run_with_auto_post_disabled(self, processor, sample_article, sample_comment, mock_config, capsys):
         """Test run method with auto-post disabled.
-        
+
         When AUTO_POST_ENABLED is false, responses should go to pending_review,
         but post_approved_responses should still be called to post any manually approved responses.
         """
         mock_config.auto_post_enabled = False
         comments = [sample_comment]
-        
+
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=comments):
                 with patch.object(processor, 'process_comment', return_value={
@@ -612,7 +612,7 @@ More text here.
                         with patch.object(processor, 'post_approved_responses') as mock_post:
                             with patch.object(processor, 'clear_pending_comments'):
                                 processor.run()
-                                
+
                                 captured = capsys.readouterr()
                                 assert "Posting approved responses" in captured.out
                                 # Should still call post_approved_responses

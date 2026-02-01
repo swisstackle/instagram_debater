@@ -109,13 +109,13 @@ async def mock_openrouter_chat(request: Request):
     """Mock OpenRouter chat completions endpoint."""
     data = await request.json()
     messages = data.get("messages", [])
-    
+
     # Simple mock response based on content
     user_message = ""
     for msg in messages:
         if msg.get("role") == "user":
             user_message = msg.get("content", "")
-    
+
     # Generate a simple mock response
     if "check_comment_relevance" in user_message or "CHECK_COMMENT_RELEVANCE" in user_message:
         response_text = "YES"
@@ -123,12 +123,12 @@ async def mock_openrouter_chat(request: Request):
         response_text = "YES"
     else:
         # Generate a mock debate response
-        response_text = """According to the article (§1.2), climate change is a critical issue that requires immediate action. 
+        response_text = """According to the article (§1.2), climate change is a critical issue that requires immediate action.
 
 The evidence shows that global temperatures have risen significantly over the past century. This is supported by multiple scientific studies cited in §3.1.
 
 I encourage you to read the full article for more context: [Article Link]"""
-    
+
     return {
         "id": "chatcmpl-mock123",
         "object": "chat.completion",
@@ -165,13 +165,13 @@ async def reset_test_state():
 async def seed_test_data(request: Request):
     """Seed test data for testing."""
     data = await request.json()
-    
+
     if "audit_log" in data:
         save_audit_log(data["audit_log"])
-    
+
     if "pending_comments" in data:
         save_pending_comments(data["pending_comments"])
-    
+
     return {"status": "ok"}
 
 # ================== MOUNT DASHBOARD APP ==================

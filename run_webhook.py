@@ -11,16 +11,16 @@ def main():
     """Run the webhook server."""
     # Load configuration
     config = Config()
-    
+
     # Initialize webhook receiver
     init_webhook_receiver(
         verify_token=config.instagram_verify_token,
         app_secret=config.instagram_app_secret
     )
-    
+
     print("Starting webhook server...")
     print(f"Webhook verification token: {config.instagram_verify_token}")
-    
+
     # Run uvicorn server
     uvicorn.run(
         app,
