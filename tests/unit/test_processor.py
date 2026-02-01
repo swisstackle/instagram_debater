@@ -820,3 +820,123 @@ More text here.
 
                                 captured = capsys.readouterr()
                                 assert "Processing 1 pending comment(s)" in captured.out
+
+
+class TestCommentProcessorUnnumbered:
+    """Test suite for CommentProcessor with unnumbered articles."""
+
+    @pytest.fixture
+    def mock_instagram_api(self):
+        """Create a mock Instagram API."""
+        mock_api = Mock()
+        mock_api.get_post_caption.return_value = "Test post caption"
+        mock_api.get_comment_replies.return_value = []
+        mock_api.post_reply.return_value = {"id": "reply_123"}
+        return mock_api
+
+    @pytest.fixture
+    def mock_llm_client(self):
+        """Create a mock LLM client."""
+        mock_llm = Mock()
+        mock_llm.check_post_topic_relevance.return_value = True
+        mock_llm.check_comment_relevance.return_value = True
+        mock_llm.check_topic_relevance.return_value = True
+        mock_llm.load_template.return_value = "Template: {TOPIC} {FULL_ARTICLE_TEXT}"
+        mock_llm.fill_template.return_value = "Filled template"
+        mock_llm.generate_response.return_value = "Generated response without citations"
+        return mock_llm
+
+    @pytest.fixture
+    def mock_validator(self):
+        """Create a mock response validator."""
+        mock_val = Mock()
+        mock_val.validate_response.return_value = (True, [])
+        mock_val.extract_citations.return_value = []
+        return mock_val
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock config with unnumbered article."""
+        mock_cfg = Mock()
+        mock_cfg.auto_post_enabled = False
+        mock_cfg.articles_config = [{
+            "path": "articles_unnumbered/test.md",
+            "link": "https://example.com/test",
+            "is_numbered": False
+        }]
+        return mock_cfg
+
+    @pytest.fixture
+    def processor(self, mock_instagram_api, mock_llm_client, mock_validator, mock_config):
+        """Create a CommentProcessor instance with mocked dependencies."""
+        return CommentProcessor(
+            mock_instagram_api,
+            mock_llm_client,
+            mock_validator,
+            mock_config
+        )
+
+    @pytest.fixture
+    def sample_unnumbered_article(self):
+        """Sample unnumbered article content."""
+        return """# General Fitness Guidelines
+
+Regular physical activity is beneficial for health.
+
+## Benefits
+
+Exercise helps with weight management and reduces disease risk.
+"""
+
+    @pytest.fixture
+    def sample_comment(self):
+        """Sample comment data."""
+        return {
+            "comment_id": "comment_123",
+            "post_id": "post_456",
+            "username": "testuser",
+            "text": "What do you think about exercise?"
+        }
+
+    def test_load_articles_with_is_numbered_flag(self, processor):
+        """Test loading articles with is_numbered flag."""
+        articles_config = [
+            {
+                "path": "articles_unnumbered/test.md",
+                "link": "https://example.com/test",
+                "is_numbered": False
+            }
+        ]
+
+        article_content = "# Test Article\n\nContent without numbered sections."
+
+        with patch.object(processor, 'load_article', return_value=article_content):
+            articles = processor.load_articles(articles_config)
+
+            assert len(articles) == 1
+            assert articles[0]["is_numbered"] is False
+            assert articles[0]["path"] == "articles_unnumbered/test.md"
+
+    def test_process_comment_multi_article_unnumbered(
+        self, processor, sample_comment, sample_unnumbered_article,
+        mock_llm_client, mock_validator
+    ):
+        """Test processing comment with unnumbered article."""
+        articles = [{
+            "path": "articles_unnumbered/test.md",
+            "link": "https://example.com/test",
+            "content": sample_unnumbered_article,
+            "title": "General Fitness Guidelines",
+            "summary": "Regular physical activity is beneficial for health.",
+            "is_numbered": False
+        }]
+
+        result = processor.process_comment_multi_article(sample_comment, articles)
+
+        assert result is not None
+        assert result["comment_id"] == "comment_123"
+        assert result["status"] in ["approved", "pending_review"]
+        # Verify validator was called with is_numbered flag
+        mock_validator.validate_response.assert_called_once()
+        # Citations should be empty for unnumbered articles
+        assert result["citations_used"] == []
