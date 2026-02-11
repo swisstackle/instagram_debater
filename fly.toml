@@ -12,7 +12,7 @@ primary_region = "iad"
 
 # Service 1: Public site (80/443) → webhook on internal 8080
 [[services]]
-  processes = ["webhook"]
+  processes = ["dashboard"]
   internal_port = 8080
   protocol = "tcp"
 
@@ -28,7 +28,7 @@ primary_region = "iad"
 # Service 2: Dashboard → external 8000 → internal 8081
 # If you need IPv4 access on port 8000 using the shared IPv4, include "tls".
 [[services]]
-  processes = ["dashboard"]
+  processes = ["webhook"]
   internal_port = 8081
   protocol = "tcp"
 
