@@ -7,7 +7,7 @@ primary_region = "iad"
 # Define process groups and their commands (supersede Docker CMD)
 [processes]
   webhook   = ".venv/bin/python run_webhook.py"
-  dashboard = ".venv/bin/uvicorn dashboard:app"
+  dashboard = ".venv/bin/python dashboard.py"
   # worker = ".venv/bin/python main.py"   # uncomment if/when you want it
 
 # Service 1: Public site (80/443) → webhook on internal 8080
