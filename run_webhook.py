@@ -20,12 +20,13 @@ def main():
 
     print("Starting webhook server...")
     print(f"Webhook verification token: {config.instagram_verify_token}")
+    print(f"Listening on http://{config.webhook_host}:{config.webhook_port}")
 
     # Run uvicorn server
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=8000,
+        host=config.webhook_host,
+        port=config.webhook_port,
         log_level="info"
     )
 

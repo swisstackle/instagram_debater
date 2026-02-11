@@ -87,3 +87,23 @@ class Config:
                 return []
 
         return []
+
+    @property
+    def dashboard_port(self) -> int:
+        """Get dashboard server port."""
+        return int(os.getenv("DASHBOARD_PORT", "5000"))
+
+    @property
+    def dashboard_host(self) -> str:
+        """Get dashboard server host."""
+        return os.getenv("DASHBOARD_HOST", "127.0.0.1")
+
+    @property
+    def webhook_port(self) -> int:
+        """Get webhook server port."""
+        return int(os.getenv("WEBHOOK_PORT", "8000"))
+
+    @property
+    def webhook_host(self) -> str:
+        """Get webhook server host."""
+        return os.getenv("WEBHOOK_HOST", "0.0.0.0")
