@@ -21,14 +21,19 @@ The dashboard provides a web interface for reviewing and managing AI-generated r
 ### Start the Dashboard
 
 ```bash
-# Default port (5000)
+# Default port (5000) and host (127.0.0.1)
 python dashboard.py
 
-# Custom port
+# Custom port via command line
 python dashboard.py 8080
+
+# Custom port and host via environment variables
+DASHBOARD_PORT=3000 DASHBOARD_HOST=0.0.0.0 python dashboard.py
 ```
 
-The dashboard will be available at `http://127.0.0.1:5000` (or your custom port).
+The dashboard will be available at `http://127.0.0.1:5000` (or your custom port/host).
+
+You can also set `DASHBOARD_PORT` and `DASHBOARD_HOST` in your `.env` file for persistent configuration.
 
 ## Running Tests
 

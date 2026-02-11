@@ -57,7 +57,13 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `OPENROUTER_API_KEY` - OpenRouter API key for LLM access
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
 
-4. **Article configuration:**
+4. **Optional server configuration:**
+   - `DASHBOARD_PORT` - Dashboard server port (default: 5000)
+   - `DASHBOARD_HOST` - Dashboard server host (default: 127.0.0.1)
+   - `WEBHOOK_PORT` - Webhook server port (default: 8000)
+   - `WEBHOOK_HOST` - Webhook server host (default: 0.0.0.0)
+
+5. **Article configuration:**
    - `ARTICLES_CONFIG` - JSON array with article configurations
    - Each article can specify `is_numbered` (default: true)
      - `is_numbered: true` - Article uses numbered sections (§X.Y.Z) and requires citations
