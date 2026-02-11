@@ -591,8 +591,14 @@ app = create_dashboard_app()
 if __name__ == "__main__":
     import uvicorn
     import sys
+    from src.config import Config
 
-    port = 5000
+    config = Config()
+
+    # Allow command-line argument to override environment variable
+    port = config.dashboard_port
+    host = config.dashboard_host
+
     if len(sys.argv) > 1:
         try:
             port = int(sys.argv[1])
@@ -600,8 +606,8 @@ if __name__ == "__main__":
             print(f"Invalid port number: {sys.argv[1]}")
             sys.exit(1)
 
-    print(f"Starting Instagram Debate Bot Dashboard on http://127.0.0.1:{port}")
+    print(f"Starting Instagram Debate Bot Dashboard on http://{host}:{port}")
     print(f"State directory: {os.path.abspath('state')}")
     print("Press Ctrl+C to stop")
 
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run(app, host=host, port=port, log_level="info")

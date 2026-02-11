@@ -110,3 +110,53 @@ class TestConfig:
         config = Config()
         articles = config.articles_config
         assert articles == []
+
+    def test_dashboard_port_default(self, monkeypatch):
+        """Test dashboard_port property with default value."""
+        monkeypatch.delenv("DASHBOARD_PORT", raising=False)
+        config = Config()
+        assert config.dashboard_port == 5000
+        assert isinstance(config.dashboard_port, int)
+
+    def test_dashboard_port_custom(self, monkeypatch):
+        """Test dashboard_port property with custom value."""
+        monkeypatch.setenv("DASHBOARD_PORT", "3000")
+        config = Config()
+        assert config.dashboard_port == 3000
+
+    def test_dashboard_host_default(self, monkeypatch):
+        """Test dashboard_host property with default value."""
+        monkeypatch.delenv("DASHBOARD_HOST", raising=False)
+        config = Config()
+        assert config.dashboard_host == "127.0.0.1"
+
+    def test_dashboard_host_custom(self, monkeypatch):
+        """Test dashboard_host property with custom value."""
+        monkeypatch.setenv("DASHBOARD_HOST", "0.0.0.0")
+        config = Config()
+        assert config.dashboard_host == "0.0.0.0"
+
+    def test_webhook_port_default(self, monkeypatch):
+        """Test webhook_port property with default value."""
+        monkeypatch.delenv("WEBHOOK_PORT", raising=False)
+        config = Config()
+        assert config.webhook_port == 8000
+        assert isinstance(config.webhook_port, int)
+
+    def test_webhook_port_custom(self, monkeypatch):
+        """Test webhook_port property with custom value."""
+        monkeypatch.setenv("WEBHOOK_PORT", "9000")
+        config = Config()
+        assert config.webhook_port == 9000
+
+    def test_webhook_host_default(self, monkeypatch):
+        """Test webhook_host property with default value."""
+        monkeypatch.delenv("WEBHOOK_HOST", raising=False)
+        config = Config()
+        assert config.webhook_host == "0.0.0.0"
+
+    def test_webhook_host_custom(self, monkeypatch):
+        """Test webhook_host property with custom value."""
+        monkeypatch.setenv("WEBHOOK_HOST", "127.0.0.1")
+        config = Config()
+        assert config.webhook_host == "127.0.0.1"
