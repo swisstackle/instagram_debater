@@ -28,11 +28,20 @@ def main():
         temperature=config.temperature
     )
 
-    # Load article for validator
-    with open(config.article_path, 'r', encoding='utf-8') as f:
-        article_text = f.read()
+    # Handle multi-article vs single-article mode
+    articles_config = config.articles_config
 
-    validator = ResponseValidator(article_text)
+    if len(articles_config) > 1:
+        # Multi-article mode: processor handles validation internally
+        validator = None
+    elif len(articles_config) == 1:
+        # Single-article mode: create validator for backward compatibility
+        with open(articles_config[0]["path"], 'r', encoding='utf-8') as f:
+            article_text = f.read()
+        validator = ResponseValidator(article_text)
+    else:
+        # No articles configured: create a minimal validator
+        validator = None
 
     # Create processor
     processor = CommentProcessor(
