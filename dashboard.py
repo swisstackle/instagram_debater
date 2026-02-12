@@ -4,6 +4,7 @@ Provides a web interface to review and manage generated responses.
 """
 import os
 import secrets
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from urllib.parse import urlencode
@@ -15,6 +16,21 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from src.file_utils import load_json_file, save_json_file
 from src.config import Config
 from src.token_manager import TokenManager
+
+# Configure dashboard logger
+logger = logging.getLogger('dashboard')
+logger.setLevel(logging.INFO)
+
+# Add console handler if not already present
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
 
 def create_dashboard_app(state_dir: str = "state") -> FastAPI:
@@ -43,12 +59,14 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     @app.get("/api/responses")
     async def get_responses():
         """Get all responses from audit log."""
+        logger.info("GET /api/responses")
         audit_log = load_audit_log()
         return {"responses": audit_log.get("entries", [])}
 
     @app.get("/api/responses/pending")
     async def get_pending_responses():
         """Get pending responses only."""
+        logger.info("GET /api/responses/pending")
         audit_log = load_audit_log()
         entries = audit_log.get("entries", [])
         pending = [e for e in entries if e.get("status") == "pending_review"]
@@ -57,6 +75,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     @app.post("/api/responses/{response_id}/approve")
     async def approve_response(response_id: str):
         """Approve a response."""
+        logger.info(f"POST /api/responses/{response_id}/approve")
         audit_log = load_audit_log()
         entries = audit_log.get("entries", [])
 
@@ -65,13 +84,16 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 entry["status"] = "approved"
                 entry["approved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 save_audit_log(audit_log)
+                logger.info(f"POST /api/responses/{response_id}/approve - 200")
                 return {"status": "ok", "response_id": response_id}
 
+        logger.warning(f"POST /api/responses/{response_id}/approve - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")
 
     @app.post("/api/responses/{response_id}/reject")
     async def reject_response(response_id: str, request: Request):
         """Reject a response."""
+        logger.info(f"POST /api/responses/{response_id}/reject")
         data = await request.json()
         reason = data.get("reason", "No reason provided")
 
@@ -84,13 +106,16 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 entry["rejected_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 entry["rejection_reason"] = reason
                 save_audit_log(audit_log)
+                logger.info(f"POST /api/responses/{response_id}/reject - 200")
                 return {"status": "ok", "response_id": response_id}
 
+        logger.warning(f"POST /api/responses/{response_id}/reject - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")
 
     @app.post("/api/responses/{response_id}/edit")
     async def edit_response(response_id: str, request: Request):
         """Edit a response."""
+        logger.info(f"POST /api/responses/{response_id}/edit")
         data = await request.json()
         new_text = data.get("text", "")
 
@@ -102,8 +127,10 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 entry["generated_response"] = new_text
                 entry["edited_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 save_audit_log(audit_log)
+                logger.info(f"POST /api/responses/{response_id}/edit - 200")
                 return {"status": "ok", "response_id": response_id}
 
+        logger.warning(f"POST /api/responses/{response_id}/edit - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")
 
     # ================== OAUTH ENDPOINTS ==================
@@ -130,6 +157,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         Redirects user to Instagram authorization page with business scopes.
         Uses www.instagram.com endpoint as per Facebook documentation.
         """
+        logger.info("GET /auth/instagram/login")
         import time
         
         # Clean up expired states
@@ -152,6 +180,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         
         oauth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
         
+        logger.info("GET /auth/instagram/login - 307 Redirecting to Instagram OAuth")
         return RedirectResponse(url=oauth_url, status_code=307)
 
     @app.get("/auth/instagram/callback")
@@ -165,11 +194,14 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             code: Authorization code from Instagram
             state: CSRF protection state parameter
         """
+        logger.info("GET /auth/instagram/callback")
         # Validate required parameters
         if not code:
+            logger.error("GET /auth/instagram/callback - 400 Missing authorization code")
             raise HTTPException(status_code=400, detail="Missing authorization code")
         
         if not state or state not in oauth_states:
+            logger.error("GET /auth/instagram/callback - 400 Invalid state parameter")
             raise HTTPException(status_code=400, detail="Invalid state parameter (CSRF protection)")
         
         # Remove used state
@@ -185,6 +217,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             )
             
             if not short_lived_data:
+                logger.error("GET /auth/instagram/callback - 400 Failed to exchange authorization code")
                 raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
             
             # Step 2: Exchange short-lived token for long-lived token
@@ -194,6 +227,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             )
             
             if not long_lived_data:
+                logger.error("GET /auth/instagram/callback - 400 Failed to get long-lived token")
                 raise HTTPException(status_code=400, detail="Failed to get long-lived token")
             
             # Step 3: Store long-lived token
@@ -206,9 +240,11 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             )
             
             # Redirect to dashboard
+            logger.info("GET /auth/instagram/callback - 303 OAuth successful, redirecting to dashboard")
             return RedirectResponse(url="/", status_code=303)
             
         except Exception as e:  # pylint: disable=broad-except
+            logger.error(f"GET /auth/instagram/callback - 500 OAuth error: {str(e)}")
             raise HTTPException(status_code=500, detail=f"OAuth error: {str(e)}") from e
 
     @app.get("/auth/instagram/logout")
@@ -217,7 +253,9 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         Clear user session and logout.
         Removes stored token and clears session.
         """
+        logger.info("GET /auth/instagram/logout")
         token_manager.clear_token()
+        logger.info("GET /auth/instagram/logout - 303 Token cleared, redirecting to dashboard")
         return RedirectResponse(url="/", status_code=303)
 
     # Helper functions for OAuth
@@ -293,6 +331,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def dashboard_home():
         """Dashboard home page."""
+        logger.info("GET /")
         # Check if user is authenticated
         token_data = token_manager.get_token()
         is_authenticated = token_data is not None and not token_manager.is_token_expired()
