@@ -126,38 +126,6 @@ class TestOAuthHelpers:
             assert data['access_token'] == 'long_lived_token_456'
             assert data['expires_in'] == 5184000
 
-    def test_oauth_redirect_url_construction_legacy(self):
-        """Test construction of legacy Instagram OAuth redirect URL (non-business scopes).
-        
-        NOTE: This test documents the OLD OAuth flow with api.instagram.com and non-business scopes.
-        The actual implementation now uses www.instagram.com with business scopes.
-        See test_business_oauth_redirect_url_construction and test_oauth_login_endpoint_uses_business_flow
-        for the current implementation tests.
-        """
-        from urllib.parse import urlencode
-        
-        client_id = "test_client_id"
-        redirect_uri = "http://localhost:5000/auth/instagram/callback"
-        state = "random_state_123"
-        scope = "instagram_basic,instagram_manage_comments,pages_show_list"
-        
-        # Construct OAuth URL (legacy approach)
-        params = {
-            'client_id': client_id,
-            'redirect_uri': redirect_uri,
-            'scope': scope,
-            'response_type': 'code',
-            'state': state
-        }
-        
-        oauth_url = f"https://api.instagram.com/oauth/authorize?{urlencode(params)}"
-        
-        # Verify URL structure (legacy approach)
-        assert "instagram.com" in oauth_url
-        assert client_id in oauth_url
-        assert state in oauth_url
-        assert "instagram_basic" in oauth_url
-
     def test_csrf_state_validation(self):
         """Test CSRF state validation logic."""
         import secrets

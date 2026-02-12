@@ -142,7 +142,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         # Build OAuth URL with business scopes
         # Using www.instagram.com endpoint for Instagram Business/Graph API
         params = {
-            'force_reauth': 'true',
+            'force_reauth': 'true',  # String 'true' required by Instagram OAuth API
             'client_id': config.instagram_client_id,
             'redirect_uri': config.instagram_redirect_uri,
             'response_type': 'code',
