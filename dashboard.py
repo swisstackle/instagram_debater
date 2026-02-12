@@ -303,7 +303,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
                 </div>
             """
         
-        html_content = f"""
+        html_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
