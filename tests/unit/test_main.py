@@ -10,6 +10,17 @@ import pytest
 from main import main
 
 
+@pytest.fixture
+def sample_article():
+    """Sample article content."""
+    return """# Test Article
+
+## §1. Introduction
+
+This is a test article.
+"""
+
+
 class TestMain:
     """Test suite for main function."""
 
@@ -27,16 +38,6 @@ class TestMain:
             {"path": "articles/article1.md", "link": "https://example.com/article1"}
         ]
         return mock_cfg
-
-    @pytest.fixture
-    def sample_article(self):
-        """Sample article content."""
-        return """# Test Article
-
-## §1. Introduction
-
-This is a test article.
-"""
 
     def test_main_single_article(self, mock_config, sample_article):
         """Test main function with single article configuration."""
@@ -202,13 +203,3 @@ class TestMainIntegration:
                                 assert call_kwargs["llm_client"] == mock_llm.return_value
                                 assert call_kwargs["validator"] == mock_validator.return_value
                                 assert call_kwargs["config"] == mock_cfg
-
-    @pytest.fixture
-    def sample_article(self):
-        """Sample article content."""
-        return """# Test Article
-
-## §1. Introduction
-
-This is a test article.
-"""

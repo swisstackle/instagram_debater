@@ -40,7 +40,7 @@ def main():
             article_text = f.read()
         validator = ResponseValidator(article_text)
     else:
-        # No articles configured: create a minimal validator
+        # No articles configured: no validator needed (processor will handle errors)
         validator = None
 
     # Create processor
