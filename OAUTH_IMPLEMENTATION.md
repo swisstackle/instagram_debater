@@ -310,18 +310,91 @@ This would enable **fully automated token management** where:
 3. Token refreshes automatically
 4. No manual environment variable updates needed
 
+### Architecture: Single-Account Design
+
+**Important:** The current bot architecture is designed for **single-account operation**, not multi-account.
+
+#### How It Works
+
+1. **main.py is executed once per bot run**
+   - Each execution processes pending comments for ONE Instagram account
+   - The token is loaded at startup and used throughout that execution
+   - When execution completes, the process ends
+
+2. **Single Token Storage**
+   - Only ONE token stored in `state/instagram_token.json` at a time
+   - New OAuth login overwrites the previous token
+   - Dashboard shows authentication status for the currently stored token
+
+3. **Execution Model**
+   ```
+   Run 1: python main.py → Uses Token A → Processes comments → Exits
+   Run 2: python main.py → Uses Token A → Processes comments → Exits
+   Run 3: python main.py → Uses Token A → Processes comments → Exits
+   ```
+
+4. **Account Switching**
+   - To switch accounts: Login via OAuth with a different account
+   - New token replaces old token in `state/instagram_token.json`
+   - Next `main.py` execution will use the new account's token
+
+#### Why Single-Account?
+
+The bot is designed as a **single-purpose automation tool** for one Instagram Business account:
+- Monitors comments on that account's posts
+- Responds using that account's identity
+- Manages that account's comment threads
+
+This design is intentional because:
+- Most use cases involve managing one brand/account
+- Simpler architecture without session/user management complexity
+- Clearer audit trail and logging
+- Easier to deploy and maintain
+
+#### Multi-Account Support (Not Currently Implemented)
+
+To support multiple accounts simultaneously, you would need:
+
+1. **Session Management**
+   - Store multiple tokens with account identifiers
+   - Dashboard tracks which user is logged in
+   - Token storage: `state/tokens/<user_id>/instagram_token.json`
+
+2. **Process-per-Account Model**
+   ```python
+   # main.py would need to accept an account parameter
+   python main.py --account=user1
+   python main.py --account=user2
+   ```
+
+3. **Modified Config Class**
+   ```python
+   def __init__(self, account_id: Optional[str] = None):
+       self.account_id = account_id
+       self.token_manager = TokenManager(
+           state_dir=f"state/accounts/{account_id or 'default'}"
+       )
+   ```
+
+4. **Dashboard Changes**
+   - Multi-user authentication
+   - Account selector in UI
+   - Separate audit logs per account
+
+**Current Recommendation:** Deploy separate bot instances for each Instagram account, each with its own token and state directory.
+
 ### Summary
 
 **Where the token is used:**
-- **Storage:** `state/instagram_token.json` (via TokenManager)
+- **Storage:** `state/instagram_token.json` (via TokenManager) - ONE token for ONE account
 - **Retrieval:** `src/config.py` → `config.instagram_access_token` property
-- **Initialization:** `main.py` → `InstagramAPI(access_token=...)`
+- **Initialization:** `main.py` → `InstagramAPI(access_token=...)` - Happens once per execution
 - **Operations:** All Instagram Graph API calls in `src/instagram_api.py`
   - Fetching comments and replies
   - Getting post captions
   - Posting replies to comments
 
-The token enables the bot to authenticate as the Instagram Business account and perform all comment management operations on behalf of the authenticated user.
+**Key Point:** `main.py` is executed once per bot run, loads the token at startup, processes comments for that ONE account, then exits. It's not a long-running server that handles multiple accounts - it's a single-execution batch processor for a single Instagram account.
 
 ## API Endpoints Used
 
