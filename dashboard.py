@@ -3,12 +3,17 @@ Production dashboard server for Instagram Debate Bot.
 Provides a web interface to review and manage generated responses.
 """
 import os
+import secrets
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 
+import requests
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from src.file_utils import load_json_file, save_json_file
+from src.config import Config
+from src.token_manager import TokenManager
 
 
 def create_dashboard_app(state_dir: str = "state") -> FastAPI:
@@ -100,11 +105,205 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 
         raise HTTPException(status_code=404, detail="Response not found")
 
+    # ================== OAUTH ENDPOINTS ==================
+    # Initialize config and token manager
+    config = Config()
+    token_manager = TokenManager(state_dir=state_dir)
+    
+    # Store OAuth state in memory (in production, use session storage or Redis)
+    oauth_states = {}
+    
+    @app.get("/auth/instagram/login")
+    async def instagram_oauth_login():
+        """
+        Initiate Instagram OAuth flow.
+        Redirects user to Instagram authorization page.
+        """
+        # Generate CSRF state
+        state = secrets.token_urlsafe(32)
+        oauth_states[state] = True
+        
+        # Build OAuth URL
+        params = {
+            'client_id': config.instagram_client_id,
+            'redirect_uri': config.instagram_redirect_uri,
+            'scope': 'instagram_basic,instagram_manage_comments,pages_show_list',
+            'response_type': 'code',
+            'state': state
+        }
+        
+        oauth_url = f"https://api.instagram.com/oauth/authorize?{urlencode(params)}"
+        
+        return RedirectResponse(url=oauth_url, status_code=307)
+
+    @app.get("/auth/instagram/callback")
+    async def instagram_oauth_callback(code: str = None, state: str = None):
+        """
+        Handle OAuth callback from Instagram.
+        Exchange authorization code for short-lived token,
+        then exchange for long-lived token and store.
+        
+        Args:
+            code: Authorization code from Instagram
+            state: CSRF protection state parameter
+        """
+        # Validate required parameters
+        if not code:
+            raise HTTPException(status_code=400, detail="Missing authorization code")
+        
+        if not state or state not in oauth_states:
+            raise HTTPException(status_code=400, detail="Invalid state parameter (CSRF protection)")
+        
+        # Remove used state
+        del oauth_states[state]
+        
+        try:
+            # Step 1: Exchange code for short-lived token
+            short_lived_data = exchange_code_for_token(
+                code=code,
+                client_id=config.instagram_client_id,
+                client_secret=config.instagram_client_secret,
+                redirect_uri=config.instagram_redirect_uri
+            )
+            
+            if not short_lived_data:
+                raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
+            
+            # Step 2: Exchange short-lived token for long-lived token
+            long_lived_data = exchange_for_long_lived_token(
+                short_lived_token=short_lived_data['access_token'],
+                client_secret=config.instagram_client_secret
+            )
+            
+            if not long_lived_data:
+                raise HTTPException(status_code=400, detail="Failed to get long-lived token")
+            
+            # Step 3: Store long-lived token
+            token_manager.save_token(
+                access_token=long_lived_data['access_token'],
+                token_type=long_lived_data.get('token_type', 'bearer'),
+                expires_in=long_lived_data.get('expires_in', 5184000),
+                user_id=short_lived_data.get('user_id'),
+                username=short_lived_data.get('username')
+            )
+            
+            # Redirect to dashboard
+            return RedirectResponse(url="/", status_code=303)
+            
+        except Exception as e:  # pylint: disable=broad-except
+            raise HTTPException(status_code=500, detail=f"OAuth error: {str(e)}") from e
+
+    @app.get("/auth/instagram/logout")
+    async def instagram_oauth_logout():
+        """
+        Clear user session and logout.
+        Removes stored token and clears session.
+        """
+        token_manager.clear_token()
+        return RedirectResponse(url="/", status_code=303)
+
+    # Helper functions for OAuth
+    def exchange_code_for_token(code: str, client_id: str, client_secret: str, redirect_uri: str):
+        """
+        Exchange authorization code for short-lived access token.
+        
+        Args:
+            code: Authorization code from Instagram
+            client_id: Instagram client ID
+            client_secret: Instagram client secret
+            redirect_uri: Registered redirect URI
+            
+        Returns:
+            Dictionary with token data or None if failed
+        """
+        try:
+            response = requests.post(
+                'https://api.instagram.com/oauth/access_token',
+                data={
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'grant_type': 'authorization_code',
+                    'redirect_uri': redirect_uri,
+                    'code': code
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except requests.RequestException:
+            return None
+
+    def exchange_for_long_lived_token(short_lived_token: str, client_secret: str):
+        """
+        Exchange short-lived token for long-lived token (60 days).
+        
+        Args:
+            short_lived_token: Short-lived access token
+            client_secret: Instagram client secret
+            
+        Returns:
+            Dictionary with long-lived token data or None if failed
+        """
+        try:
+            response = requests.get(
+                'https://graph.instagram.com/access_token',
+                params={
+                    'grant_type': 'ig_exchange_token',
+                    'client_secret': client_secret,
+                    'access_token': short_lived_token
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except requests.RequestException:
+            return None
+
+    def validate_oauth_state(provided_state: str, expected_state: str) -> bool:
+        """
+        Validate OAuth state parameter for CSRF protection.
+        
+        Args:
+            provided_state: State parameter from OAuth callback
+            expected_state: Expected state stored in session
+            
+        Returns:
+            True if states match, False otherwise
+        """
+        return provided_state == expected_state
+
     # ================== DASHBOARD UI ==================
     @app.get("/", response_class=HTMLResponse)
     async def dashboard_home():
         """Dashboard home page."""
-        html_content = """
+        # Check if user is authenticated
+        token_data = token_manager.get_token()
+        is_authenticated = token_data is not None and not token_manager.is_token_expired()
+        
+        # Build auth section HTML
+        if is_authenticated:
+            username = token_data.get('username', 'User')
+            user_id = token_data.get('user_id', 'N/A')
+            auth_section = f"""
+                <div class="auth-info">
+                    <span class="auth-status authenticated">✓ Authenticated</span>
+                    <span class="user-info">@{username} (ID: {user_id})</span>
+                    <a href="/auth/instagram/logout" class="btn-logout">Logout</a>
+                </div>
+            """
+        else:
+            auth_section = """
+                <div class="auth-info">
+                    <span class="auth-status not-authenticated">⚠ Not Authenticated</span>
+                    <a href="/auth/instagram/login" class="btn-login">Login with Instagram</a>
+                </div>
+            """
+        
+        html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -129,11 +328,69 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             border-bottom: 1px solid #ddd;
             padding: 1rem 2rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .header h1 {
             font-size: 1.5rem;
             color: #333;
+        }
+
+        .auth-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .auth-status {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .auth-status.authenticated {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .auth-status.not-authenticated {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .user-info {
+            font-size: 0.875rem;
+            color: #666;
+        }
+
+        .btn-login, .btn-logout {
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-login {
+            background: #0095f6;
+            color: #fff;
+        }
+
+        .btn-login:hover {
+            background: #007cc2;
+        }
+
+        .btn-logout {
+            background: #6c757d;
+            color: #fff;
+        }
+
+        .btn-logout:hover {
+            background: #5a6268;
         }
 
         .container {
@@ -361,6 +618,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 <body>
     <div class="header">
         <h1>Instagram Debate Bot Dashboard</h1>
+        """ + auth_section + """
     </div>
 
     <div class="container">
