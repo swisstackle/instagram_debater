@@ -25,8 +25,14 @@ Implemented three OAuth endpoints:
 
 #### `/auth/instagram/login`
 - Generates secure CSRF state token
-- Redirects user to Instagram OAuth authorization page
-- Requests required scopes: `instagram_basic`, `instagram_manage_comments`, `pages_show_list`
+- Redirects user to Instagram OAuth authorization page with `force_reauth=true`
+- Uses Instagram Business endpoint: `www.instagram.com/oauth/authorize`
+- Requests business scopes:
+  - `instagram_business_basic` - Basic profile and page info
+  - `instagram_business_manage_messages` - Manage DMs
+  - `instagram_business_manage_comments` - Read and manage comments
+  - `instagram_business_content_publish` - Publish content
+  - `instagram_business_manage_insights` - Access insights
 
 #### `/auth/instagram/callback`
 - Validates CSRF state parameter
@@ -505,10 +511,12 @@ To support multiple accounts simultaneously, you would need:
 
 ## API Endpoints Used
 
-1. **Authorization**: `https://api.instagram.com/oauth/authorize`
+1. **Authorization**: `https://www.instagram.com/oauth/authorize` (Business/Graph API endpoint)
 2. **Token Exchange**: `https://api.instagram.com/oauth/access_token`
 3. **Long-Lived Token**: `https://graph.instagram.com/access_token?grant_type=ig_exchange_token`
 4. **Token Refresh**: `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token`
+
+**Note**: The authorization endpoint uses `www.instagram.com` (not `api.instagram.com`) for Instagram Business accounts, as specified in the Facebook Graph API documentation.
 
 ## Files Modified/Created
 
