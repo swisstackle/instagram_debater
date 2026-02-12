@@ -242,7 +242,7 @@ Update `requirements.txt` accordingly.
 
 **TDD Step 3: Implement**
 - [ ] Implement background task or startup check for token refresh
-- [ ] Add automatic refresh logic (trigger at day 50-55)
+- [ ] Add automatic refresh logic (trigger at day 55, which is 5 days before 60-day expiration)
 - [ ] Add logging for token refresh events
 - [ ] Run tests (all tests should now pass)
 
@@ -262,12 +262,12 @@ Update `requirements.txt` accordingly.
 - [ ] Run tests (all tests should now pass)
 
 ### Phase 7: Integration Testing
-- [ ] Run all unit tests together: `pytest tests/unit/`
-- [ ] Run all Playwright tests: `npx playwright test`
+- [ ] Run all unit tests together: `pytest tests/unit/` (all should pass)
+- [ ] Run all Playwright tests: `npx playwright test` (all should pass)
 - [ ] Test full OAuth flow end-to-end manually
 - [ ] Test token refresh mechanism
 - [ ] Test error scenarios (network failures, invalid tokens)
-- [ ] Verify all tests pass
+- [ ] Verify all tests pass (100% pass rate expected)
 
 ### Phase 8: Documentation
 - [ ] Update README with OAuth setup instructions
