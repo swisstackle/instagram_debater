@@ -102,6 +102,227 @@ Enhanced the dashboard header to show authentication status:
 - Refresh extends validity for another 60 days
 - Failed refresh prompts user to re-authenticate
 
+## How the Long-Lived Token is Used in the Codebase
+
+After successful OAuth authentication, the long-lived access token is stored in `state/instagram_token.json` and used throughout the application for Instagram API operations.
+
+### Token Storage Location
+
+```
+state/instagram_token.json
+```
+
+**File Structure:**
+```json
+{
+  "access_token": "long_lived_token_abc123...",
+  "token_type": "bearer",
+  "expires_at": "2026-04-13T01:30:00Z",
+  "saved_at": "2026-02-12T01:30:00Z",
+  "user_id": "123456789",
+  "username": "testuser"
+}
+```
+
+### Token Retrieval Flow
+
+The token is accessed through two main paths:
+
+#### 1. Environment Variable (Legacy Method)
+
+**Location:** `src/config.py:38-40`
+
+```python
+@property
+def instagram_access_token(self) -> str:
+    """Get Instagram access token."""
+    return os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+```
+
+This property reads from the `INSTAGRAM_ACCESS_TOKEN` environment variable, which can be:
+- Manually set in `.env` file (legacy approach)
+- OR retrieved from the OAuth token storage (future enhancement)
+
+#### 2. Token Manager (OAuth Method)
+
+**Location:** `src/token_manager.py`
+
+```python
+from src.token_manager import TokenManager
+
+manager = TokenManager(state_dir="state")
+token_data = manager.get_token()
+access_token = token_data["access_token"]
+```
+
+### Where the Token is Used for Comment Management
+
+#### Main Entry Point: `main.py`
+
+**Location:** `main.py:19-22`
+
+```python
+instagram_api = InstagramAPI(
+    access_token=config.instagram_access_token,  # ← Token used here
+    app_secret=config.instagram_app_secret
+)
+```
+
+The `InstagramAPI` class is initialized with the access token, which is then used for ALL Instagram Graph API operations.
+
+#### Comment Retrieval Operations
+
+**Location:** `src/instagram_api.py`
+
+The access token is used in these API operations:
+
+1. **Get Comment Details** (`get_comment()` - Line 61-79)
+   ```python
+   url = f"{self.BASE_URL}/{comment_id}"
+   params = {
+       "access_token": self.access_token,  # ← Token used here
+       "fields": "id,text,timestamp,from,media"
+   }
+   response = requests.get(url, params=params, timeout=30)
+   ```
+
+2. **Get Comment Replies** (`get_comment_replies()` - Line 81-99)
+   ```python
+   url = f"{self.BASE_URL}/{comment_id}/replies"
+   params = {
+       "access_token": self.access_token,  # ← Token used here
+   }
+   response = requests.get(url, params=params, timeout=30)
+   ```
+
+3. **Get Post Caption** (`get_post_caption()` - Line 101-120)
+   ```python
+   url = f"{self.BASE_URL}/{post_id}"
+   params = {
+       "access_token": self.access_token,  # ← Token used here
+       "fields": "caption"
+   }
+   response = requests.get(url, params=params, timeout=30)
+   ```
+
+4. **Post Reply to Comment** (`post_reply()` - Line 122-141)
+   ```python
+   url = f"{self.BASE_URL}/{comment_id}/replies"
+   params = {
+       "access_token": self.access_token,  # ← Token used here
+       "message": message
+   }
+   response = requests.post(url, params=params, timeout=30)
+   ```
+
+#### Comment Processing Flow
+
+**Location:** `src/processor.py`
+
+The processor uses the `InstagramAPI` instance (with the token) to:
+
+1. **Fetch Post Caption** (Line 167)
+   ```python
+   post_caption = self.instagram_api.get_post_caption(comment["post_id"])
+   ```
+
+2. **Build Thread Context** (Line 338)
+   ```python
+   replies = self.instagram_api.get_comment_replies(comment_id)
+   ```
+
+3. **Post Approved Responses** (Line 431-434)
+   ```python
+   _result = self.instagram_api.post_reply(
+       entry["comment_id"],
+       entry["generated_response"]
+   )
+   ```
+
+### Complete Usage Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User authenticates via OAuth                             │
+│    (dashboard.py: /auth/instagram/callback)                 │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Long-lived token stored in state/instagram_token.json   │
+│    (token_manager.py: save_token())                         │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. Bot main process starts (main.py)                        │
+│    - Reads config.instagram_access_token                    │
+│    - Currently from INSTAGRAM_ACCESS_TOKEN env var          │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. InstagramAPI initialized with token                      │
+│    (main.py: InstagramAPI(access_token=...))                │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Token used for all Instagram API operations:             │
+│    • Fetch comments (get_comment)                           │
+│    • Get comment replies (get_comment_replies)              │
+│    • Get post captions (get_post_caption)                   │
+│    • Post replies (post_reply)                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Current State vs. Future Enhancement
+
+**Current Implementation:**
+- OAuth flow stores token in `state/instagram_token.json`
+- Dashboard uses token to display auth status
+- **Main bot process still reads from `INSTAGRAM_ACCESS_TOKEN` environment variable**
+- User must manually sync OAuth token to environment variable
+
+**Recommended Future Enhancement:**
+
+Modify `src/config.py` to prioritize OAuth token:
+
+```python
+@property
+def instagram_access_token(self) -> str:
+    """Get Instagram access token."""
+    # Try OAuth token first
+    from src.token_manager import TokenManager
+    manager = TokenManager(state_dir="state")
+    token_data = manager.get_token()
+    
+    if token_data and not manager.is_token_expired():
+        return token_data["access_token"]
+    
+    # Fall back to environment variable
+    return os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+```
+
+This would enable **fully automated token management** where:
+1. User authenticates once via OAuth
+2. Bot automatically uses the OAuth token
+3. Token refreshes automatically
+4. No manual environment variable updates needed
+
+### Summary
+
+**Where the token is used:**
+- **Storage:** `state/instagram_token.json` (via TokenManager)
+- **Retrieval:** `src/config.py` → `config.instagram_access_token` property
+- **Initialization:** `main.py` → `InstagramAPI(access_token=...)`
+- **Operations:** All Instagram Graph API calls in `src/instagram_api.py`
+  - Fetching comments and replies
+  - Getting post captions
+  - Posting replies to comments
+
+The token enables the bot to authenticate as the Instagram Business account and perform all comment management operations on behalf of the authenticated user.
+
 ## API Endpoints Used
 
 1. **Authorization**: `https://api.instagram.com/oauth/authorize`
