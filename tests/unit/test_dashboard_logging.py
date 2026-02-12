@@ -6,6 +6,9 @@ Tests follow TDD approach - tests written before implementation.
 import tempfile
 import shutil
 import logging
+import json
+import os
+import asyncio
 from io import StringIO
 from unittest.mock import patch, AsyncMock, MagicMock
 
@@ -20,8 +23,6 @@ class TestDashboardLogging:
         """Create a temporary state directory for tests."""
         temp_dir = tempfile.mkdtemp()
         # Create empty audit log
-        import json
-        import os
         audit_log_path = os.path.join(temp_dir, "audit_log.json")
         with open(audit_log_path, "w") as f:
             json.dump({"version": "1.0", "entries": []}, f)
@@ -61,10 +62,20 @@ class TestDashboardLogging:
         logger = logging.getLogger('dashboard')
         assert logger is not None
 
+    @pytest.fixture
+    def mock_request_json(self):
+        """Helper fixture to create mock request with json method."""
+        def create_mock(data):
+            mock_request = MagicMock()
+            async def mock_json():
+                return data
+            mock_request.json = mock_json
+            return mock_request
+        return create_mock
+
     def test_get_responses_logs_request(self, app, log_capture):
         """Test that GET /api/responses logs the request."""
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/api/responses':
                 response = asyncio.run(route.endpoint())
@@ -77,7 +88,6 @@ class TestDashboardLogging:
     def test_get_pending_responses_logs_request(self, app, log_capture):
         """Test that GET /api/responses/pending logs the request."""
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/api/responses/pending':
                 response = asyncio.run(route.endpoint())
@@ -90,9 +100,6 @@ class TestDashboardLogging:
     def test_approve_response_logs_request(self, app, temp_state_dir, log_capture):
         """Test that POST /api/responses/{id}/approve logs the request."""
         # Add a test entry first
-        import json
-        import os
-        import asyncio
         audit_log_path = os.path.join(temp_state_dir, "audit_log.json")
         with open(audit_log_path, "r") as f:
             audit_log = json.load(f)
@@ -117,12 +124,9 @@ class TestDashboardLogging:
         assert "POST" in log_output
         assert "approve" in log_output
 
-    def test_reject_response_logs_request(self, app, temp_state_dir, log_capture):
+    def test_reject_response_logs_request(self, app, temp_state_dir, log_capture, mock_request_json):
         """Test that POST /api/responses/{id}/reject logs the request."""
         # Add a test entry first
-        import json
-        import os
-        import asyncio
         audit_log_path = os.path.join(temp_state_dir, "audit_log.json")
         with open(audit_log_path, "r") as f:
             audit_log = json.load(f)
@@ -139,10 +143,7 @@ class TestDashboardLogging:
         # Find and call the endpoint directly with mock request
         for route in app.routes:
             if hasattr(route, 'path') and '/reject' in route.path:
-                mock_request = MagicMock()
-                async def mock_json():
-                    return {"reason": "Test rejection"}
-                mock_request.json = mock_json
+                mock_request = mock_request_json({"reason": "Test rejection"})
                 response = asyncio.run(route.endpoint("test-456", mock_request))
                 assert response is not None
                 break
@@ -151,12 +152,9 @@ class TestDashboardLogging:
         assert "POST" in log_output
         assert "reject" in log_output
 
-    def test_edit_response_logs_request(self, app, temp_state_dir, log_capture):
+    def test_edit_response_logs_request(self, app, temp_state_dir, log_capture, mock_request_json):
         """Test that POST /api/responses/{id}/edit logs the request."""
         # Add a test entry first
-        import json
-        import os
-        import asyncio
         audit_log_path = os.path.join(temp_state_dir, "audit_log.json")
         with open(audit_log_path, "r") as f:
             audit_log = json.load(f)
@@ -173,10 +171,7 @@ class TestDashboardLogging:
         # Find and call the endpoint directly with mock request
         for route in app.routes:
             if hasattr(route, 'path') and '/edit' in route.path:
-                mock_request = MagicMock()
-                async def mock_json():
-                    return {"text": "Updated text"}
-                mock_request.json = mock_json
+                mock_request = mock_request_json({"text": "Updated text"})
                 response = asyncio.run(route.endpoint("test-789", mock_request))
                 assert response is not None
                 break
@@ -193,7 +188,6 @@ class TestDashboardLogging:
         monkeypatch.setenv("INSTAGRAM_REDIRECT_URI", "http://localhost/callback")
         
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/auth/instagram/login':
                 response = asyncio.run(route.endpoint())
@@ -207,7 +201,6 @@ class TestDashboardLogging:
     def test_oauth_logout_logs_request(self, app, log_capture):
         """Test that GET /auth/instagram/logout logs the request."""
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/auth/instagram/logout':
                 response = asyncio.run(route.endpoint())
@@ -221,7 +214,6 @@ class TestDashboardLogging:
     def test_dashboard_home_logs_request(self, app, log_capture):
         """Test that GET / logs the request."""
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/':
                 response = asyncio.run(route.endpoint())
@@ -235,7 +227,6 @@ class TestDashboardLogging:
     def test_error_response_logs_status(self, app, log_capture):
         """Test that error responses log the error status code."""
         # Try to approve non-existent response
-        import asyncio
         from fastapi import HTTPException
         
         # Find and call the endpoint directly
@@ -253,7 +244,6 @@ class TestDashboardLogging:
     def test_log_format_includes_timestamp(self, app, log_capture):
         """Test that logs include timestamp information."""
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/api/responses':
                 response = asyncio.run(route.endpoint())
@@ -268,7 +258,6 @@ class TestDashboardLogging:
     def test_log_format_includes_method_and_path(self, app, log_capture):
         """Test that logs include HTTP method and path."""
         # Find and call the endpoint directly
-        import asyncio
         for route in app.routes:
             if hasattr(route, 'path') and route.path == '/api/responses/pending':
                 response = asyncio.run(route.endpoint())
