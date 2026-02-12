@@ -121,7 +121,6 @@ Enhanced the dashboard header to show authentication status:
 - `src/config.py` - Added OAuth config properties
 - `dashboard.py` - Added OAuth endpoints and UI updates
 - `tests/unit/test_config.py` - Added OAuth config tests
-- `requirements.txt` - Added Authlib dependency
 - `README.md` - Added OAuth setup documentation
 - `.env.example` - Added OAuth environment variables
 

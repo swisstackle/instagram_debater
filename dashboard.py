@@ -5,6 +5,7 @@ Provides a web interface to review and manage generated responses.
 import os
 import secrets
 from datetime import datetime, timezone
+from typing import Optional, Dict, Any
 from urllib.parse import urlencode
 
 import requests
@@ -217,7 +218,12 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         return RedirectResponse(url="/", status_code=303)
 
     # Helper functions for OAuth
-    def exchange_code_for_token(code: str, client_id: str, client_secret: str, redirect_uri: str):
+    def exchange_code_for_token(
+        code: str, 
+        client_id: str, 
+        client_secret: str, 
+        redirect_uri: str
+    ) -> Optional[Dict[str, Any]]:
         """
         Exchange authorization code for short-lived access token.
         
@@ -249,7 +255,10 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         except requests.RequestException:
             return None
 
-    def exchange_for_long_lived_token(short_lived_token: str, client_secret: str):
+    def exchange_for_long_lived_token(
+        short_lived_token: str, 
+        client_secret: str
+    ) -> Optional[Dict[str, Any]]:
         """
         Exchange short-lived token for long-lived token (60 days).
         
