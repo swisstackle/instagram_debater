@@ -107,3 +107,18 @@ class Config:
     def webhook_host(self) -> str:
         """Get webhook server host."""
         return os.getenv("WEBHOOK_HOST", "0.0.0.0")
+
+    @property
+    def instagram_client_id(self) -> str:
+        """Get Instagram OAuth client ID (Facebook App ID)."""
+        return os.getenv("INSTAGRAM_CLIENT_ID", "")
+
+    @property
+    def instagram_client_secret(self) -> str:
+        """Get Instagram OAuth client secret (Facebook App Secret)."""
+        return os.getenv("INSTAGRAM_CLIENT_SECRET", "")
+
+    @property
+    def instagram_redirect_uri(self) -> str:
+        """Get Instagram OAuth redirect URI."""
+        return os.getenv("INSTAGRAM_REDIRECT_URI", "http://127.0.0.1:5000/auth/instagram/callback")

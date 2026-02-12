@@ -52,18 +52,31 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 
 3. **Required environment variables:**
    - `INSTAGRAM_APP_SECRET` - Instagram app secret for webhook verification
-   - `INSTAGRAM_ACCESS_TOKEN` - Instagram access token
+   - `INSTAGRAM_ACCESS_TOKEN` - Instagram access token (or use OAuth login)
    - `INSTAGRAM_VERIFY_TOKEN` - Webhook verification token
    - `OPENROUTER_API_KEY` - OpenRouter API key for LLM access
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
 
-4. **Optional server configuration:**
+4. **OAuth configuration (for Instagram Business Login):**
+   - `INSTAGRAM_CLIENT_ID` - Facebook App ID
+   - `INSTAGRAM_CLIENT_SECRET` - Facebook App Secret
+   - `INSTAGRAM_REDIRECT_URI` - OAuth callback URL (default: http://127.0.0.1:5000/auth/instagram/callback)
+   
+   **Setting up OAuth:**
+   1. Create a Facebook App at [Meta for Developers](https://developers.facebook.com/)
+   2. Add Instagram Basic Display API or Instagram Graph API
+   3. Configure OAuth redirect URIs in the app settings
+   4. Add the credentials to your `.env` file
+   5. Start the dashboard and click "Login with Instagram"
+   6. The bot will automatically obtain and refresh long-lived tokens (60 days)
+
+5. **Optional server configuration:**
    - `DASHBOARD_PORT` - Dashboard server port (default: 5000)
    - `DASHBOARD_HOST` - Dashboard server host (default: 127.0.0.1)
    - `WEBHOOK_PORT` - Webhook server port (default: 8000)
    - `WEBHOOK_HOST` - Webhook server host (default: 0.0.0.0)
 
-5. **Article configuration:**
+6. **Article configuration:**
    - `ARTICLES_CONFIG` - JSON array with article configurations
    - Each article can specify `is_numbered` (default: true)
      - `is_numbered: true` - Article uses numbered sections (§X.Y.Z) and requires citations
@@ -130,6 +143,18 @@ pytest --cov=src tests/
    - Validates citations
    - Checks response length
    - Detects hallucinations
+
+6. **Token Manager** (`token_manager.py`)
+   - Manages OAuth access tokens
+   - Stores long-lived tokens (60-day validity)
+   - Automatically refreshes tokens before expiration
+   - Handles token expiration checks
+
+7. **Dashboard** (`dashboard.py`)
+   - Web interface for reviewing responses
+   - OAuth login/logout functionality
+   - Displays authentication status
+   - Shows token expiration information
 
 ## Design Principles
 
