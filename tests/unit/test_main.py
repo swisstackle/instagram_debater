@@ -131,3 +131,84 @@ This is a test article.
 
                         # Verify processor.run() was called
                         mock_processor.return_value.run.assert_called_once()
+
+
+class TestMainIntegration:
+    """Integration tests for main function with multi-article support."""
+
+    @pytest.fixture
+    def mock_config_multi(self):
+        """Create a mock config with multiple articles."""
+        mock_cfg = Mock()
+        mock_cfg.instagram_access_token = "test_token"
+        mock_cfg.instagram_app_secret = "test_secret"
+        mock_cfg.openrouter_api_key = "test_api_key"
+        mock_cfg.model_name = "test_model"
+        mock_cfg.max_tokens = 2000
+        mock_cfg.temperature = 0.7
+        mock_cfg.articles_config = [
+            {"path": "articles/fitness.md", "link": "https://example.com/fitness"},
+            {"path": "articles/nutrition.md", "link": "https://example.com/nutrition"}
+        ]
+        return mock_cfg
+
+    def test_integration_multi_article_processor_receives_none_validator(self, mock_config_multi):
+        """Test that processor receives None validator in multi-article mode."""
+        with patch("main.Config", return_value=mock_config_multi):
+            with patch("main.InstagramAPI") as mock_api:
+                with patch("main.LLMClient") as mock_llm:
+                    with patch("main.ResponseValidator"):
+                        with patch("main.CommentProcessor") as mock_processor:
+                            # Call main
+                            main()
+
+                            # Verify processor was called with validator=None
+                            call_kwargs = mock_processor.call_args[1]
+                            assert call_kwargs["instagram_api"] == mock_api.return_value
+                            assert call_kwargs["llm_client"] == mock_llm.return_value
+                            assert call_kwargs["validator"] is None
+                            assert call_kwargs["config"] == mock_config_multi
+
+    def test_integration_single_article_processor_receives_validator(self, sample_article):
+        """Test that processor receives validator in single-article mode."""
+        mock_cfg = Mock()
+        mock_cfg.instagram_access_token = "test_token"
+        mock_cfg.instagram_app_secret = "test_secret"
+        mock_cfg.openrouter_api_key = "test_api_key"
+        mock_cfg.model_name = "test_model"
+        mock_cfg.max_tokens = 2000
+        mock_cfg.temperature = 0.7
+        mock_cfg.articles_config = [
+            {"path": "articles/single.md", "link": "https://example.com/single"}
+        ]
+
+        with patch("main.Config", return_value=mock_cfg):
+            with patch("main.InstagramAPI") as mock_api:
+                with patch("main.LLMClient") as mock_llm:
+                    with patch("main.ResponseValidator") as mock_validator:
+                        with patch("main.CommentProcessor") as mock_processor:
+                            with patch("builtins.open", create=True) as mock_open_file:
+                                mock_open_file.return_value.__enter__.return_value.read.return_value = sample_article
+
+                                # Call main
+                                main()
+
+                                # Verify validator was created with article text
+                                mock_validator.assert_called_once_with(sample_article)
+
+                                # Verify processor was called with validator
+                                call_kwargs = mock_processor.call_args[1]
+                                assert call_kwargs["instagram_api"] == mock_api.return_value
+                                assert call_kwargs["llm_client"] == mock_llm.return_value
+                                assert call_kwargs["validator"] == mock_validator.return_value
+                                assert call_kwargs["config"] == mock_cfg
+
+    @pytest.fixture
+    def sample_article(self):
+        """Sample article content."""
+        return """# Test Article
+
+## §1. Introduction
+
+This is a test article.
+"""
