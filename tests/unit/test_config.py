@@ -196,3 +196,28 @@ class TestConfig:
         monkeypatch.delenv("INSTAGRAM_REDIRECT_URI", raising=False)
         config = Config()
         assert config.instagram_redirect_uri == "http://127.0.0.1:5000/auth/instagram/callback"
+
+    def test_article_path_from_articles_config(self, monkeypatch):
+        """Test article_path property derives from first article in articles_config."""
+        monkeypatch.setenv(
+            "ARTICLES_CONFIG",
+            '[{"path": "articles/article1.md", "link": "https://example.com/article1"}]'
+        )
+        config = Config()
+        assert config.article_path == "articles/article1.md"
+
+    def test_article_path_empty_when_no_articles(self, monkeypatch):
+        """Test article_path returns empty string when articles_config is empty."""
+        monkeypatch.delenv("ARTICLES_CONFIG", raising=False)
+        config = Config()
+        assert config.article_path == ""
+
+    def test_article_path_first_article_when_multiple(self, monkeypatch):
+        """Test article_path returns first article when multiple articles configured."""
+        monkeypatch.setenv(
+            "ARTICLES_CONFIG",
+            '[{"path": "articles/article1.md", "link": "https://example.com/article1"}, '
+            '{"path": "articles/article2.md", "link": "https://example.com/article2"}]'
+        )
+        config = Config()
+        assert config.article_path == "articles/article1.md"
