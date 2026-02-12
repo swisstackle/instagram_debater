@@ -126,8 +126,9 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     @app.get("/auth/instagram/login")
     async def instagram_oauth_login():
         """
-        Initiate Instagram OAuth flow.
-        Redirects user to Instagram authorization page.
+        Initiate Instagram OAuth flow for Business accounts.
+        Redirects user to Instagram authorization page with business scopes.
+        Uses www.instagram.com endpoint as per Facebook documentation.
         """
         import time
         
@@ -138,16 +139,18 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         state = secrets.token_urlsafe(32)
         oauth_states[state] = time.time()
         
-        # Build OAuth URL
+        # Build OAuth URL with business scopes
+        # Using www.instagram.com endpoint for Instagram Business/Graph API
         params = {
+            'force_reauth': 'true',  # String 'true' required by Instagram OAuth API
             'client_id': config.instagram_client_id,
             'redirect_uri': config.instagram_redirect_uri,
-            'scope': 'instagram_basic,instagram_manage_comments,pages_show_list',
             'response_type': 'code',
+            'scope': 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights',
             'state': state
         }
         
-        oauth_url = f"https://api.instagram.com/oauth/authorize?{urlencode(params)}"
+        oauth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
         
         return RedirectResponse(url=oauth_url, status_code=307)
 
