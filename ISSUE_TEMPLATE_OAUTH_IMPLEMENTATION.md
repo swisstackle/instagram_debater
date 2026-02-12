@@ -9,6 +9,31 @@ Copy the content below and create a new GitHub issue.
 
 Implement Instagram Business Login using OAuth 2.0 to allow users to authenticate through the dashboard and obtain long-lived access tokens for Instagram API operations.
 
+## ⚠️ Development Approach: Test-Driven Development (TDD)
+
+**This project follows Test-Driven Development principles. You MUST:**
+
+1. **Create class/module skeletons first** - Define classes, methods, and interfaces with docstrings but minimal implementation
+2. **Write tests second** - Create comprehensive unit tests and Playwright tests for the skeleton code
+3. **Implement functionality last** - Make the tests pass by implementing the actual logic
+
+**TDD Workflow:**
+```
+1. Write skeleton code (classes, method signatures, docstrings)
+2. Write unit tests (pytest) for all methods
+3. Write integration/E2E tests (Playwright) for UI flows
+4. Run tests (they should fail)
+5. Implement actual functionality
+6. Run tests (they should pass)
+7. Refactor and iterate
+```
+
+This approach ensures:
+- ✅ Test coverage is complete from the start
+- ✅ Clear API design before implementation
+- ✅ Confidence that all functionality works as expected
+- ✅ Easy refactoring with test safety net
+
 ## Requirements
 
 Based on research documented in [INSTAGRAM_OAUTH_RESEARCH.md](INSTAGRAM_OAUTH_RESEARCH.md):
@@ -121,46 +146,136 @@ pip install Authlib requests python-dotenv
 
 Update `requirements.txt` accordingly.
 
-## Implementation Checklist
+## Implementation Checklist (TDD Approach)
 
-### Phase 1: Basic OAuth Flow
-- [ ] Add Authlib to dependencies
-- [ ] Implement OAuth login endpoint in dashboard.py
-- [ ] Implement OAuth callback endpoint
-- [ ] Test OAuth flow with development redirect URI
+### Phase 1: Project Setup & Dependencies
+- [ ] Add Authlib to `requirements.txt`
+- [ ] Install dependencies: `pip install Authlib requests python-dotenv playwright`
+- [ ] Verify project structure and existing patterns
 
-### Phase 2: Long-Lived Token Management
-- [ ] Create `src/token_manager.py` module
-- [ ] Implement token exchange (short → long-lived)
+### Phase 2: Token Manager - Skeleton & Tests
+**TDD Step 1: Create Skeleton**
+- [ ] Create `src/token_manager.py` with `TokenManager` class skeleton
+- [ ] Define method signatures: `save_token()`, `get_token()`, `is_token_expired()`, `refresh_token()`
+- [ ] Add comprehensive docstrings for all methods
+
+**TDD Step 2: Write Tests**
+- [ ] Create `tests/unit/test_token_manager.py`
+- [ ] Write unit tests for `save_token()` (test file creation, JSON format)
+- [ ] Write unit tests for `get_token()` (test retrieval, missing file, expired token)
+- [ ] Write unit tests for `is_token_expired()` (test expiration logic)
+- [ ] Write unit tests for `refresh_token()` (test API call mocking)
+- [ ] Run tests (should fail) ❌
+
+**TDD Step 3: Implement**
 - [ ] Implement token storage in `state/instagram_token.json`
-- [ ] Add token metadata (expires_in, obtained_at)
+- [ ] Implement token retrieval logic
+- [ ] Implement expiration check (refresh 5 days before expiry)
+- [ ] Implement token refresh API call
+- [ ] Run tests (should pass) ✅
 
-### Phase 3: Token Refresh
-- [ ] Implement token expiration check
-- [ ] Implement automatic token refresh logic
-- [ ] Add background task or startup check for token refresh
-- [ ] Log token refresh events
+### Phase 3: OAuth Flow - Skeleton & Tests
+**TDD Step 1: Create Skeleton**
+- [ ] Add OAuth route skeletons to `dashboard.py`:
+  - `instagram_oauth_login()` - Initiate OAuth
+  - `instagram_oauth_callback()` - Handle callback
+  - `instagram_oauth_logout()` - Clear session
+- [ ] Add helper function skeletons: `exchange_for_long_lived_token()`, `validate_oauth_state()`
+- [ ] Add comprehensive docstrings
 
-### Phase 4: Dashboard UI
-- [ ] Add "Login with Instagram" button
-- [ ] Show authenticated user status
-- [ ] Display token expiration info
-- [ ] Add logout functionality
+**TDD Step 2: Write Tests**
+- [ ] Create `tests/unit/test_oauth_endpoints.py`
+- [ ] Write unit tests for login endpoint (test redirect URL generation)
+- [ ] Write unit tests for callback endpoint (test token exchange, state validation)
+- [ ] Write unit tests for logout endpoint (test session clearing)
+- [ ] Write unit tests for `exchange_for_long_lived_token()` (mock API calls)
+- [ ] Mock Instagram API responses using `requests-mock`
+- [ ] Run tests (should fail) ❌
+
+**TDD Step 3: Implement**
+- [ ] Configure OAuth with Authlib in dashboard.py
+- [ ] Implement login endpoint (redirect to Instagram with state parameter)
+- [ ] Implement callback endpoint (exchange code → short-lived → long-lived token)
+- [ ] Implement logout endpoint (clear session)
+- [ ] Implement helper functions
+- [ ] Run tests (should pass) ✅
+
+### Phase 4: Dashboard UI - Skeleton & Tests
+**TDD Step 1: Create Skeleton**
+- [ ] Add HTML template skeletons for:
+  - Login button/page
+  - Authenticated user dashboard
+  - Token status display
+- [ ] Add route skeletons for UI endpoints
+
+**TDD Step 2: Write Tests**
+- [ ] Create `e2e/test_oauth_flow.js` (Playwright)
+- [ ] Write E2E test: User clicks "Login with Instagram" button
+- [ ] Write E2E test: OAuth redirect flow (mock Instagram OAuth)
+- [ ] Write E2E test: Successful authentication shows user info
+- [ ] Write E2E test: Token status displayed correctly
+- [ ] Write E2E test: Logout clears session
+- [ ] Write E2E test: Error handling (failed OAuth, expired token)
+- [ ] Run tests (should fail) ❌
+
+**TDD Step 3: Implement**
+- [ ] Create/update HTML templates with login UI
+- [ ] Add "Login with Instagram" button to dashboard
+- [ ] Display authenticated user info (username, profile)
+- [ ] Show token status (valid, expires in X days)
+- [ ] Add logout button and functionality
 - [ ] Handle authentication errors gracefully
+- [ ] Run tests (should pass) ✅
 
-### Phase 5: Security & Testing
-- [ ] Add state parameter for CSRF protection
-- [ ] Validate redirect URI in callback
-- [ ] Add unit tests for token_manager
-- [ ] Add integration tests for OAuth flow (mocked)
+### Phase 5: Token Refresh Automation - Skeleton & Tests
+**TDD Step 1: Create Skeleton**
+- [ ] Add background task skeleton for token refresh check
+- [ ] Add startup check skeleton for token validation
+- [ ] Add logging skeleton for refresh events
+
+**TDD Step 2: Write Tests**
+- [ ] Write unit tests for background refresh task
+- [ ] Write unit tests for startup token validation
+- [ ] Write tests for refresh logging
+- [ ] Mock time/date for expiration scenarios
+- [ ] Run tests (should fail) ❌
+
+**TDD Step 3: Implement**
+- [ ] Implement background task or startup check for token refresh
+- [ ] Add automatic refresh logic (trigger at day 50-55)
+- [ ] Add logging for token refresh events
+- [ ] Run tests (should pass) ✅
+
+### Phase 6: Security - Tests & Implementation
+**TDD Step 1: Write Security Tests**
+- [ ] Write tests for CSRF protection (state parameter validation)
+- [ ] Write tests for redirect URI validation
+- [ ] Write tests for token storage security (server-side only)
+- [ ] Write tests for HTTPS enforcement (production)
+- [ ] Run tests (should fail) ❌
+
+**TDD Step 2: Implement Security**
+- [ ] Implement state parameter generation and validation (CSRF)
+- [ ] Validate redirect URI matches registered URI
+- [ ] Ensure tokens stored server-side only
+- [ ] Add HTTPS checks for production environment
+- [ ] Run tests (should pass) ✅
+
+### Phase 7: Integration Testing
+- [ ] Run all unit tests together: `pytest tests/unit/`
+- [ ] Run all Playwright tests: `npx playwright test`
+- [ ] Test full OAuth flow end-to-end manually
 - [ ] Test token refresh mechanism
-- [ ] Security audit of token storage
+- [ ] Test error scenarios (network failures, invalid tokens)
+- [ ] Verify all tests pass ✅
 
-### Phase 6: Documentation
+### Phase 8: Documentation
 - [ ] Update README with OAuth setup instructions
 - [ ] Document how to register app in Meta Developer Console
 - [ ] Document how to configure redirect URIs
 - [ ] Add troubleshooting section
+- [ ] Document testing procedures
+- [ ] Add inline code comments for complex logic
 
 ## References
 
@@ -188,19 +303,22 @@ Key sections:
 
 ## Notes
 
+- **IMPORTANT: Follow TDD approach strictly** - Skeleton → Tests → Implementation
 - Current code already has OAuth config properties in `src/config.py`
 - Current code already has tests for OAuth config in `tests/unit/test_config.py`
 - Use existing project patterns (Config class, file_utils, etc.)
-- Follow TDD approach as per project conventions
+- Use pytest for unit tests, Playwright for E2E tests
 - Dashboard server runs on `127.0.0.1:5000` by default
 
 ## Success Criteria
 
+✅ All code written following TDD approach (skeleton → tests → implementation)  
+✅ Comprehensive test coverage (unit tests + Playwright tests)  
+✅ All tests passing (pytest + Playwright)  
 ✅ Users can click "Login with Instagram" on dashboard  
 ✅ OAuth flow successfully authenticates users  
 ✅ Long-lived tokens (60 days) are obtained and stored  
 ✅ Tokens automatically refresh before expiration  
 ✅ Dashboard shows authenticated user info  
 ✅ All security best practices implemented  
-✅ Comprehensive test coverage  
 ✅ Documentation updated
