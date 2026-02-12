@@ -110,8 +110,17 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
     config = Config()
     token_manager = TokenManager(state_dir=state_dir)
     
-    # Store OAuth state in memory (in production, use session storage or Redis)
+    # Store OAuth state with timestamps (in production, use session storage or Redis)
     oauth_states = {}
+    
+    def cleanup_expired_states():
+        """Remove OAuth states older than 10 minutes."""
+        import time
+        current_time = time.time()
+        expired = [state for state, timestamp in oauth_states.items() 
+                   if current_time - timestamp > 600]  # 10 minutes
+        for state in expired:
+            del oauth_states[state]
     
     @app.get("/auth/instagram/login")
     async def instagram_oauth_login():
@@ -119,9 +128,14 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         Initiate Instagram OAuth flow.
         Redirects user to Instagram authorization page.
         """
-        # Generate CSRF state
+        import time
+        
+        # Clean up expired states
+        cleanup_expired_states()
+        
+        # Generate CSRF state with timestamp
         state = secrets.token_urlsafe(32)
-        oauth_states[state] = True
+        oauth_states[state] = time.time()
         
         # Build OAuth URL
         params = {
@@ -262,19 +276,6 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
             return None
         except requests.RequestException:
             return None
-
-    def validate_oauth_state(provided_state: str, expected_state: str) -> bool:
-        """
-        Validate OAuth state parameter for CSRF protection.
-        
-        Args:
-            provided_state: State parameter from OAuth callback
-            expected_state: Expected state stored in session
-            
-        Returns:
-            True if states match, False otherwise
-        """
-        return provided_state == expected_state
 
     # ================== DASHBOARD UI ==================
     @app.get("/", response_class=HTMLResponse)

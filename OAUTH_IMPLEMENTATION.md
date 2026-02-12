@@ -125,9 +125,11 @@ Enhanced the dashboard header to show authentication status:
 - `README.md` - Added OAuth setup documentation
 - `.env.example` - Added OAuth environment variables
 
-## Dependencies Added
+## Dependencies
 
-- `Authlib==1.3.0` - OAuth 2.0 client library
+No additional dependencies required - OAuth implementation uses:
+- Python standard library (`secrets`, `json`, `datetime`)
+- `requests` library (already in requirements.txt)
 
 ## Environment Variables
 
@@ -200,4 +202,3 @@ Potential improvements for future iterations:
 - [Instagram Graph API Documentation](https://developers.facebook.com/docs/instagram-api/)
 - [Long-Lived Access Tokens Guide](https://developers.facebook.com/docs/instagram-basic-display-api/guides/long-lived-access-tokens)
 - [OAuth 2.0 Specification](https://oauth.net/2/)
-- [Authlib Documentation](https://docs.authlib.org/)
