@@ -165,14 +165,14 @@ Update `requirements.txt` accordingly.
 - [ ] Write unit tests for `get_token()` (test retrieval, missing file, expired token)
 - [ ] Write unit tests for `is_token_expired()` (test expiration logic)
 - [ ] Write unit tests for `refresh_token()` (test API call mocking)
-- [ ] Run tests (should fail) ❌
+- [ ] Run tests (expected to fail at this stage)
 
 **TDD Step 3: Implement**
 - [ ] Implement token storage in `state/instagram_token.json`
 - [ ] Implement token retrieval logic
 - [ ] Implement expiration check (refresh 5 days before expiry)
 - [ ] Implement token refresh API call
-- [ ] Run tests (should pass) ✅
+- [ ] Run tests (all tests should now pass)
 
 ### Phase 3: OAuth Flow - Skeleton & Tests
 **TDD Step 1: Create Skeleton**
@@ -190,7 +190,7 @@ Update `requirements.txt` accordingly.
 - [ ] Write unit tests for logout endpoint (test session clearing)
 - [ ] Write unit tests for `exchange_for_long_lived_token()` (mock API calls)
 - [ ] Mock Instagram API responses using `requests-mock`
-- [ ] Run tests (should fail) ❌
+- [ ] Run tests (expected to fail at this stage)
 
 **TDD Step 3: Implement**
 - [ ] Configure OAuth with Authlib in dashboard.py
@@ -198,7 +198,7 @@ Update `requirements.txt` accordingly.
 - [ ] Implement callback endpoint (exchange code → short-lived → long-lived token)
 - [ ] Implement logout endpoint (clear session)
 - [ ] Implement helper functions
-- [ ] Run tests (should pass) ✅
+- [ ] Run tests (all tests should now pass)
 
 ### Phase 4: Dashboard UI - Skeleton & Tests
 **TDD Step 1: Create Skeleton**
@@ -216,7 +216,7 @@ Update `requirements.txt` accordingly.
 - [ ] Write E2E test: Token status displayed correctly
 - [ ] Write E2E test: Logout clears session
 - [ ] Write E2E test: Error handling (failed OAuth, expired token)
-- [ ] Run tests (should fail) ❌
+- [ ] Run tests (expected to fail at this stage)
 
 **TDD Step 3: Implement**
 - [ ] Create/update HTML templates with login UI
@@ -225,7 +225,7 @@ Update `requirements.txt` accordingly.
 - [ ] Show token status (valid, expires in X days)
 - [ ] Add logout button and functionality
 - [ ] Handle authentication errors gracefully
-- [ ] Run tests (should pass) ✅
+- [ ] Run tests (all tests should now pass)
 
 ### Phase 5: Token Refresh Automation - Skeleton & Tests
 **TDD Step 1: Create Skeleton**
@@ -238,13 +238,13 @@ Update `requirements.txt` accordingly.
 - [ ] Write unit tests for startup token validation
 - [ ] Write tests for refresh logging
 - [ ] Mock time/date for expiration scenarios
-- [ ] Run tests (should fail) ❌
+- [ ] Run tests (expected to fail at this stage)
 
 **TDD Step 3: Implement**
 - [ ] Implement background task or startup check for token refresh
 - [ ] Add automatic refresh logic (trigger at day 50-55)
 - [ ] Add logging for token refresh events
-- [ ] Run tests (should pass) ✅
+- [ ] Run tests (all tests should now pass)
 
 ### Phase 6: Security - Tests & Implementation
 **TDD Step 1: Write Security Tests**
@@ -252,14 +252,14 @@ Update `requirements.txt` accordingly.
 - [ ] Write tests for redirect URI validation
 - [ ] Write tests for token storage security (server-side only)
 - [ ] Write tests for HTTPS enforcement (production)
-- [ ] Run tests (should fail) ❌
+- [ ] Run tests (expected to fail at this stage)
 
 **TDD Step 2: Implement Security**
 - [ ] Implement state parameter generation and validation (CSRF)
 - [ ] Validate redirect URI matches registered URI
 - [ ] Ensure tokens stored server-side only
 - [ ] Add HTTPS checks for production environment
-- [ ] Run tests (should pass) ✅
+- [ ] Run tests (all tests should now pass)
 
 ### Phase 7: Integration Testing
 - [ ] Run all unit tests together: `pytest tests/unit/`
@@ -267,7 +267,7 @@ Update `requirements.txt` accordingly.
 - [ ] Test full OAuth flow end-to-end manually
 - [ ] Test token refresh mechanism
 - [ ] Test error scenarios (network failures, invalid tokens)
-- [ ] Verify all tests pass ✅
+- [ ] Verify all tests pass
 
 ### Phase 8: Documentation
 - [ ] Update README with OAuth setup instructions
