@@ -162,6 +162,7 @@ See LICENSE file for details.
 ## References
 
 - [Instagram Platform Documentation](https://developers.facebook.com/docs/instagram-api/)
+- [Instagram OAuth Research](INSTAGRAM_OAUTH_RESEARCH.md) - Complete guide on Instagram Business Login and OAuth implementation
 - [OpenRouter API](https://openrouter.ai/docs)
 - [RFC Document](rfc.md) - Complete specification
 

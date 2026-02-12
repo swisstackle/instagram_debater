@@ -160,3 +160,36 @@ class TestConfig:
         monkeypatch.setenv("WEBHOOK_HOST", "127.0.0.1")
         config = Config()
         assert config.webhook_host == "127.0.0.1"
+
+    def test_instagram_client_id_property(self, monkeypatch):
+        """Test instagram_client_id property."""
+        monkeypatch.setenv("INSTAGRAM_CLIENT_ID", "test_client_id")
+        config = Config()
+        assert config.instagram_client_id == "test_client_id"
+
+    def test_instagram_client_id_default(self):
+        """Test instagram_client_id property with default value."""
+        config = Config()
+        assert config.instagram_client_id == ""
+
+    def test_instagram_client_secret_property(self, monkeypatch):
+        """Test instagram_client_secret property."""
+        monkeypatch.setenv("INSTAGRAM_CLIENT_SECRET", "test_client_secret")
+        config = Config()
+        assert config.instagram_client_secret == "test_client_secret"
+
+    def test_instagram_client_secret_default(self):
+        """Test instagram_client_secret property with default value."""
+        config = Config()
+        assert config.instagram_client_secret == ""
+
+    def test_instagram_redirect_uri_property(self, monkeypatch):
+        """Test instagram_redirect_uri property."""
+        monkeypatch.setenv("INSTAGRAM_REDIRECT_URI", "http://localhost:5000/callback")
+        config = Config()
+        assert config.instagram_redirect_uri == "http://localhost:5000/callback"
+
+    def test_instagram_redirect_uri_default(self):
+        """Test instagram_redirect_uri property with default value."""
+        config = Config()
+        assert config.instagram_redirect_uri == ""
