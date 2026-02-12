@@ -89,19 +89,6 @@ class Config:
         return []
 
     @property
-    def article_path(self) -> str:
-        """
-        Get article path (backward compatibility).
-
-        Returns the path of the first article from articles_config.
-        Returns empty string if no articles configured.
-        """
-        articles = self.articles_config
-        if articles:
-            return articles[0].get("path", "")
-        return ""
-
-    @property
     def dashboard_port(self) -> int:
         """Get dashboard server port."""
         return int(os.getenv("DASHBOARD_PORT", "5000"))

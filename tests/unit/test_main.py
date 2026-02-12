@@ -39,49 +39,37 @@ class TestMain:
         ]
         return mock_cfg
 
-    def test_main_single_article(self, mock_config, sample_article):
+    def test_main_single_article(self, mock_config):
         """Test main function with single article configuration."""
         with patch("main.Config", return_value=mock_config):
             with patch("main.InstagramAPI") as mock_instagram_api:
                 with patch("main.LLMClient") as mock_llm_client:
-                    with patch("main.ResponseValidator") as mock_validator:
-                        with patch("main.CommentProcessor") as mock_processor:
-                            with patch("builtins.open", create=True) as mock_open_file:
-                                # Mock file reading
-                                mock_open_file.return_value.__enter__.return_value.read.return_value = sample_article
+                    with patch("main.CommentProcessor") as mock_processor:
+                        # Call main
+                        main()
 
-                                # Call main
-                                main()
+                        # Verify InstagramAPI was initialized correctly
+                        mock_instagram_api.assert_called_once_with(
+                            access_token="test_access_token",
+                            app_secret="test_app_secret"
+                        )
 
-                                # Verify InstagramAPI was initialized correctly
-                                mock_instagram_api.assert_called_once_with(
-                                    access_token="test_access_token",
-                                    app_secret="test_app_secret"
-                                )
+                        # Verify LLMClient was initialized correctly
+                        mock_llm_client.assert_called_once_with(
+                            api_key="test_api_key",
+                            model_name="test_model",
+                            max_tokens=2000,
+                            temperature=0.7
+                        )
 
-                                # Verify LLMClient was initialized correctly
-                                mock_llm_client.assert_called_once_with(
-                                    api_key="test_api_key",
-                                    model_name="test_model",
-                                    max_tokens=2000,
-                                    temperature=0.7
-                                )
+                        # Verify CommentProcessor was initialized with validator=None
+                        call_kwargs = mock_processor.call_args[1]
+                        assert call_kwargs["validator"] is None
 
-                                # Verify article file was opened
-                                mock_open_file.assert_called_once_with(
-                                    "articles/article1.md", 'r', encoding='utf-8'
-                                )
+                        # Verify processor.run() was called
+                        mock_processor.return_value.run.assert_called_once()
 
-                                # Verify ResponseValidator was created with article text
-                                mock_validator.assert_called_once_with(sample_article)
-
-                                # Verify CommentProcessor was initialized
-                                mock_processor.assert_called_once()
-
-                                # Verify processor.run() was called
-                                mock_processor.return_value.run.assert_called_once()
-
-    def test_main_multiple_articles(self, mock_config, sample_article):
+    def test_main_multiple_articles(self, mock_config):
         """Test main function with multiple articles configuration."""
         mock_config.articles_config = [
             {"path": "articles/article1.md", "link": "https://example.com/article1"},
@@ -91,30 +79,22 @@ class TestMain:
         with patch("main.Config", return_value=mock_config):
             with patch("main.InstagramAPI") as mock_instagram_api:
                 with patch("main.LLMClient") as mock_llm_client:
-                    with patch("main.ResponseValidator"):
-                        with patch("main.CommentProcessor") as mock_processor:
-                            with patch("builtins.open", create=True) as mock_open_file:
-                                # Mock file reading
-                                mock_open_file.return_value.__enter__.return_value.read.return_value = sample_article
+                    with patch("main.CommentProcessor") as mock_processor:
+                        # Call main
+                        main()
 
-                                # Call main
-                                main()
+                        # Verify InstagramAPI was initialized
+                        mock_instagram_api.assert_called_once()
 
-                                # Verify InstagramAPI was initialized
-                                mock_instagram_api.assert_called_once()
+                        # Verify LLMClient was initialized
+                        mock_llm_client.assert_called_once()
 
-                                # Verify LLMClient was initialized
-                                mock_llm_client.assert_called_once()
+                        # Verify CommentProcessor was initialized with validator=None
+                        call_kwargs = mock_processor.call_args[1]
+                        assert call_kwargs["validator"] is None
 
-                                # When multiple articles, should NOT open file in main
-                                # (processor will handle this)
-                                mock_open_file.assert_not_called()
-
-                                # Verify CommentProcessor was initialized
-                                mock_processor.assert_called_once()
-
-                                # Verify processor.run() was called
-                                mock_processor.return_value.run.assert_called_once()
+                        # Verify processor.run() was called
+                        mock_processor.return_value.run.assert_called_once()
 
     def test_main_no_articles(self, mock_config):
         """Test main function with no articles configured."""
@@ -158,20 +138,19 @@ class TestMainIntegration:
         with patch("main.Config", return_value=mock_config_multi):
             with patch("main.InstagramAPI") as mock_api:
                 with patch("main.LLMClient") as mock_llm:
-                    with patch("main.ResponseValidator"):
-                        with patch("main.CommentProcessor") as mock_processor:
-                            # Call main
-                            main()
+                    with patch("main.CommentProcessor") as mock_processor:
+                        # Call main
+                        main()
 
-                            # Verify processor was called with validator=None
-                            call_kwargs = mock_processor.call_args[1]
-                            assert call_kwargs["instagram_api"] == mock_api.return_value
-                            assert call_kwargs["llm_client"] == mock_llm.return_value
-                            assert call_kwargs["validator"] is None
-                            assert call_kwargs["config"] == mock_config_multi
+                        # Verify processor was called with validator=None
+                        call_kwargs = mock_processor.call_args[1]
+                        assert call_kwargs["instagram_api"] == mock_api.return_value
+                        assert call_kwargs["llm_client"] == mock_llm.return_value
+                        assert call_kwargs["validator"] is None
+                        assert call_kwargs["config"] == mock_config_multi
 
-    def test_integration_single_article_processor_receives_validator(self, sample_article):
-        """Test that processor receives validator in single-article mode."""
+    def test_integration_single_article_processor_receives_none_validator(self):
+        """Test that processor receives None validator in single-article mode."""
         mock_cfg = Mock()
         mock_cfg.instagram_access_token = "test_token"
         mock_cfg.instagram_app_secret = "test_secret"
@@ -186,20 +165,13 @@ class TestMainIntegration:
         with patch("main.Config", return_value=mock_cfg):
             with patch("main.InstagramAPI") as mock_api:
                 with patch("main.LLMClient") as mock_llm:
-                    with patch("main.ResponseValidator") as mock_validator:
-                        with patch("main.CommentProcessor") as mock_processor:
-                            with patch("builtins.open", create=True) as mock_open_file:
-                                mock_open_file.return_value.__enter__.return_value.read.return_value = sample_article
+                    with patch("main.CommentProcessor") as mock_processor:
+                        # Call main
+                        main()
 
-                                # Call main
-                                main()
-
-                                # Verify validator was created with article text
-                                mock_validator.assert_called_once_with(sample_article)
-
-                                # Verify processor was called with validator
-                                call_kwargs = mock_processor.call_args[1]
-                                assert call_kwargs["instagram_api"] == mock_api.return_value
-                                assert call_kwargs["llm_client"] == mock_llm.return_value
-                                assert call_kwargs["validator"] == mock_validator.return_value
-                                assert call_kwargs["config"] == mock_cfg
+                        # Verify processor was called with validator=None (no backward compatibility)
+                        call_kwargs = mock_processor.call_args[1]
+                        assert call_kwargs["instagram_api"] == mock_api.return_value
+                        assert call_kwargs["llm_client"] == mock_llm.return_value
+                        assert call_kwargs["validator"] is None
+                        assert call_kwargs["config"] == mock_cfg
