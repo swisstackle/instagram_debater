@@ -1,0 +1,4 @@
+# Run main.py every 5 minutes
+# Output is redirected to /proc/1/fd/1 (stdout) and /proc/1/fd/2 (stderr)
+# This ensures logs are visible in Fly.io dashboard
+*/5 * * * * /opt/venv/bin/python /app/main.py > /proc/1/fd/1 2>/proc/1/fd/2

@@ -8,6 +8,7 @@ primary_region = "iad"
 [processes]
   webhook   = "/opt/venv/bin/python run_webhook.py"
   dashboard = "/opt/venv/bin/python dashboard.py"
+  scheduler = "supercronic /app/crontab.txt"
   # worker = ".venv/bin/python main.py"   # uncomment if/when you want it
 
 # Service 1: Public site (80/443) → webhook on internal 8080
