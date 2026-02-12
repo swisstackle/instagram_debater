@@ -102,6 +102,113 @@ Enhanced the dashboard header to show authentication status:
 - Refresh extends validity for another 60 days
 - Failed refresh prompts user to re-authenticate
 
+### How Token Expiration Tracking Works
+
+**The `expires_at` field is calculated once and never changes until token refresh.**
+
+#### Initial Token Storage (OAuth Callback)
+
+When a token is first obtained via OAuth, `save_token()` is called:
+
+**Location:** `src/token_manager.py:52`
+
+```python
+# Calculate expiration time from current time + expires_in
+expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+token_data = {
+    "access_token": access_token,
+    "expires_at": expires_at.isoformat(),  # Fixed timestamp
+    "saved_at": datetime.now(timezone.utc).isoformat()
+}
+```
+
+**Example:**
+- Token received: `2026-02-12T01:00:00Z`
+- `expires_in`: `5184000` (60 days in seconds)
+- **`expires_at` calculated:** `2026-04-13T01:00:00Z` (fixed, doesn't change)
+
+#### Expiration Check (Every Dashboard Load)
+
+**Location:** `dashboard.py:295` and `src/token_manager.py:93-119`
+
+```python
+def is_token_expired(self, buffer_days: int = 5) -> bool:
+    token_data = self.get_token()
+    
+    # Get the FIXED expires_at timestamp from JSON
+    expires_at = datetime.fromisoformat(token_data["expires_at"])
+    
+    # Compare with CURRENT time + buffer
+    now = datetime.now(timezone.utc)
+    buffer_time = timedelta(days=buffer_days)
+    
+    # Returns True if token expires within 5 days
+    return expires_at <= (now + buffer_time)
+```
+
+**Example Timeline:**
+```
+Day 1  (Feb 12): expires_at = Apr 13, now = Feb 12, expires_in = 60 days  → Not expired
+Day 30 (Mar 13): expires_at = Apr 13, now = Mar 13, expires_in = 31 days  → Not expired
+Day 50 (Apr 2):  expires_at = Apr 13, now = Apr 2,  expires_in = 11 days  → Not expired
+Day 55 (Apr 7):  expires_at = Apr 13, now = Apr 7,  expires_in = 6 days   → Not expired
+Day 56 (Apr 8):  expires_at = Apr 13, now = Apr 8,  expires_in = 5 days   → EXPIRED (within buffer)
+```
+
+#### Token Refresh (When Expiring Soon)
+
+When `is_token_expired()` returns `True`, the dashboard can trigger `refresh_token()`:
+
+**Location:** `src/token_manager.py:121-165`
+
+```python
+def refresh_token(self, client_secret: str) -> bool:
+    # Get current token
+    current_token = self.get_token()["access_token"]
+    
+    # Call Instagram API to refresh
+    response = requests.get(
+        'https://graph.instagram.com/refresh_access_token',
+        params={'grant_type': 'ig_refresh_token', 'access_token': current_token}
+    )
+    
+    # Instagram returns NEW token with NEW expires_in (60 days)
+    refresh_data = response.json()
+    
+    # Save with NEW expiration timestamp
+    self.save_token(
+        access_token=refresh_data['access_token'],      # New token
+        expires_in=refresh_data['expires_in'],          # New 5184000 (60 days)
+        # This calculates NEW expires_at from current time
+    )
+```
+
+**After refresh:**
+- Old `expires_at`: `2026-04-13T01:00:00Z`
+- Refresh date: `2026-04-08T10:00:00Z`
+- **New `expires_at`:** `2026-06-07T10:00:00Z` (60 days from refresh time)
+
+#### Key Points
+
+1. **`expires_at` is an absolute timestamp, not relative**
+   - Stored as ISO 8601 string: `"2026-04-13T01:00:00Z"`
+   - Never changes until token is refreshed
+
+2. **Expiration check compares fixed timestamp to current time**
+   - `expires_at` (fixed) vs `now + buffer_days` (changes every check)
+   - As time progresses, `now` gets closer to `expires_at`
+
+3. **Token refresh updates the timestamp**
+   - New token → new `expires_in` → new `expires_at` calculated
+   - Resets the 60-day countdown
+
+4. **No background process needed**
+   - Check happens on-demand (dashboard load)
+   - Comparison is simple: fixed future date vs current date
+
+**The `expires_at` field stays accurate because it's a fixed future timestamp, not a countdown. As time progresses, we simply check if current time is getting close to that fixed timestamp.**
+
 ## How the Long-Lived Token is Used in the Codebase
 
 After successful OAuth authentication, the long-lived access token is stored in `state/instagram_token.json` and used throughout the application for Instagram API operations.
