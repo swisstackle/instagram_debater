@@ -6,7 +6,6 @@ Run this to process pending comments.
 from src.config import Config
 from src.instagram_api import InstagramAPI
 from src.llm_client import LLMClient
-from src.validator import ResponseValidator
 from src.processor import CommentProcessor
 
 
@@ -28,17 +27,11 @@ def main():
         temperature=config.temperature
     )
 
-    # Load article for validator
-    with open(config.article_path, 'r', encoding='utf-8') as f:
-        article_text = f.read()
-
-    validator = ResponseValidator(article_text)
-
-    # Create processor
+    # Create processor (processor handles validation internally for all modes)
     processor = CommentProcessor(
         instagram_api=instagram_api,
         llm_client=llm_client,
-        validator=validator,
+        validator=None,
         config=config
     )
 
