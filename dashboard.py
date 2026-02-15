@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 
 from src.file_utils import load_json_file, save_json_file
 from src.config import Config
@@ -191,6 +191,7 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
         
         # Build OAuth URL with business scopes
         # Using www.instagram.com endpoint for Instagram Business/Graph API
+        print("Redirect URL: ", config.instagram_redirect_uri)
         params = {
             'force_reauth': 'true',  # String 'true' required by Instagram OAuth API
             'client_id': config.instagram_client_id,
@@ -916,6 +917,64 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 </html>
     """
         return HTMLResponse(content=html_content)
+
+    @app.get("/privacy", response_class=PlainTextResponse)
+    async def privacy_policy():
+        """Return plain text privacy policy."""
+        privacy_text = """Privacy Policy for [Your Instagram Bot Name]
+Last Updated: [Date]
+
+This Privacy Policy explains how [Your Instagram Bot Name] (“we,” “our,” or “the bot”) collects, uses, and protects information when you use our Instagram automation service.
+
+1. Information We Collect
+1.1 User-Provided Information
+- Instagram username or ID
+- Messages or commands sent to the bot
+- Any data voluntarily provided for the bot to function
+
+1.2 Automatically Collected Data
+- Basic Instagram profile data allowed by Instagram’s API
+- Usage logs such as command history and timestamps
+- Technical information such as IP address or device type (if applicable)
+We do not collect passwords or sensitive authentication data.
+
+2. How We Use the Information
+- Operate and improve the bot’s functionality
+- Respond to user commands or messages
+- Provide features such as analytics, automated actions, or notifications
+- Maintain performance and security
+We do not sell, rent, or trade user data.
+
+3. Data Storage and Security
+- Data is stored securely and only as long as necessary to provide the service.
+- We take reasonable measures to protect information from unauthorized access or misuse.
+- Users may request deletion of their data at any time.
+
+4. Sharing of Information
+We do not share personal data except:
+- With service providers necessary to operate the bot (e.g., hosting services)
+- If required by law or legal process
+- To prevent fraud, abuse, or security threats
+
+5. Third-Party Services
+This bot interacts with Instagram and may rely on external APIs or platforms. Use of those services is governed by their own privacy policies.
+
+6. User Rights
+Users may:
+- Request access to stored data
+- Request deletion of their data
+- Stop using the bot at any time
+Contact: [Your Contact Email]
+
+7. Children’s Privacy
+This bot is not intended for children under 13, and we do not knowingly collect information from minors.
+
+8. Changes to This Policy
+We may update this Privacy Policy from time to time. Updates will be posted with a new “Last Updated” date.
+
+9. Contact
+For questions about this Privacy Policy, contact: [Your Contact Email]"""
+        return PlainTextResponse(content=privacy_text)
 
     return app
 

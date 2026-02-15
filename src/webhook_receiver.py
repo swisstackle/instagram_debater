@@ -63,6 +63,7 @@ class WebhookReceiver:
             return
 
         entries = payload.get("entry", [])
+        print(f"Received webhook payload with {len(entries)} entries")
         for entry in entries:
             comment_data = self.extract_comment_data(entry)
             if comment_data:
@@ -135,6 +136,7 @@ async def verify_webhook(
     Returns:
         Challenge string or 403 Forbidden
     """
+    print(f"Received webhook verification request: mode={hub_mode}, token={hub_verify_token}")
     if _webhook_receiver is None:
         raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
 
@@ -156,6 +158,7 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     Returns:
         Success response
     """
+    print("Received webhook POST request")
     if _webhook_receiver is None:
         raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
 
