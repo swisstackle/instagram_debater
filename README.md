@@ -19,13 +19,18 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 ├── articles/           # Source articles with numbered sections (§X.Y.Z)
 ├── articles_unnumbered/ # Source articles without numbered sections
 ├── src/               # Core application code
-│   ├── config.py          # Configuration management
-│   ├── file_utils.py      # File utility functions
-│   ├── instagram_api.py   # Instagram Graph API wrapper
-│   ├── llm_client.py      # OpenRouter LLM client
-│   ├── processor.py       # Main processing loop
-│   ├── validator.py       # Response validation
-│   └── webhook_receiver.py # Webhook handling
+│   ├── comment_extractor.py      # Abstract comment extractor interface
+│   ├── comment_extractor_factory.py # Factory for creating extractors
+│   ├── local_disk_extractor.py   # Local disk storage implementation
+│   ├── tigris_extractor.py       # Tigris/S3 storage implementation
+│   ├── config.py                 # Configuration management
+│   ├── file_utils.py             # File utility functions
+│   ├── instagram_api.py          # Instagram Graph API wrapper
+│   ├── llm_client.py             # OpenRouter LLM client
+│   ├── processor.py              # Main processing loop
+│   ├── token_manager.py          # OAuth token management
+│   ├── validator.py              # Response validation
+│   └── webhook_receiver.py       # Webhook handling
 ├── templates/         # Prompt templates for LLM
 │   ├── debate_prompt.txt           # For numbered articles
 │   └── debate_prompt_unnumbered.txt # For unnumbered articles
@@ -76,7 +81,28 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `WEBHOOK_PORT` - Webhook server port (default: 8000)
    - `WEBHOOK_HOST` - Webhook server host (default: 0.0.0.0)
 
-6. **Article configuration:**
+6. **Comment storage configuration:**
+   - `COMMENT_STORAGE_TYPE` - Storage backend for pending comments (`local` or `tigris`, default: `local`)
+     - `local` - Uses local disk storage (`state/pending_comments.json`)
+     - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible)
+   
+   **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris`):**
+   - `AWS_ACCESS_KEY_ID` - Tigris access key ID
+   - `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
+   - `AWS_ENDPOINT_URL_S3` - Tigris endpoint URL (default: https://fly.storage.tigris.dev)
+   - `TIGRIS_BUCKET_NAME` - Tigris bucket name
+   - `AWS_REGION` - AWS region (default: auto)
+   
+   **Setting up Tigris storage:**
+   1. Create a Tigris bucket on Fly.io: `fly storage create`
+   2. Copy the generated credentials to your `.env` file
+   3. Set `COMMENT_STORAGE_TYPE=tigris`
+   4. The bot will automatically use Tigris for storing pending comments
+   
+   This is useful when running distributed systems where the webhook server, dashboard, 
+   and comment processor are on different machines and need shared storage.
+
+7. **Article configuration:**
    - `ARTICLES_CONFIG` - JSON array with article configurations
    - Each article can specify `is_numbered` (default: true)
      - `is_numbered: true` - Article uses numbered sections (§X.Y.Z) and requires citations
@@ -118,28 +144,37 @@ pytest --cov=src tests/
 1. **Webhook Receiver** (`webhook_receiver.py`)
    - Receives Instagram webhook notifications
    - Verifies webhook signatures
-   - Saves comments to pending queue
+   - Saves comments to pending queue via comment extractor
 
-2. **Comment Processor** (`processor.py`)
-   - Loads pending comments
+2. **Comment Extractor** (modular interface)
+   - **Abstract Interface** (`comment_extractor.py`) - Defines the contract for storage backends
+   - **Local Disk Extractor** (`local_disk_extractor.py`) - Stores comments in local JSON files
+   - **Tigris Extractor** (`tigris_extractor.py`) - Stores comments in Tigris object storage (S3-compatible)
+   - **Factory** (`comment_extractor_factory.py`) - Creates appropriate extractor based on configuration
+   
+   This modular design allows the webhook server, dashboard, and comment processor to run on 
+   different machines while sharing a common storage backend.
+
+3. **Comment Processor** (`processor.py`)
+   - Loads pending comments via comment extractor
    - Selects relevant article from multiple sources
    - Checks relevance using LLM
    - Generates responses with citations
    - Validates responses
    - Posts approved responses
 
-3. **Instagram API** (`instagram_api.py`)
+4. **Instagram API** (`instagram_api.py`)
    - Fetches comment data
    - Posts replies
    - Manages rate limits
 
-4. **LLM Client** (`llm_client.py`)
+5. **LLM Client** (`llm_client.py`)
    - Generates debate responses
    - Determines article relevance
    - Checks topic relevance
    - Checks comment relevance
 
-5. **Validator** (`validator.py`)
+6. **Validator** (`validator.py`)
    - Validates citations
    - Checks response length
    - Detects hallucinations
@@ -158,11 +193,12 @@ pytest --cov=src tests/
 
 ## Design Principles
 
-- **No Database**: Uses JSON files for state management
+- **No Database**: Uses simple storage backends (JSON files or object storage)
 - **No Vector Store**: Feeds full article to LLM each time
 - **Stateless**: Each run is independent
 - **Multiple Sources**: Supports multiple articles, selects most relevant per comment
 - **Zero Hallucination**: All responses cite article content
+- **Modular Storage**: Pluggable storage backends allow distributed deployment
 - **Transparent**: Clearly identifies as a bot
 
 ## API Reference
