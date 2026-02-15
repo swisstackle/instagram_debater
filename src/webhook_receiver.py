@@ -80,9 +80,12 @@ class WebhookReceiver:
         entries = payload.get("entry", [])
         print(f"Received webhook payload with {len(entries)} entries")
         for entry in entries:
+            print(f"Processing entry: {entry}")
             comment_data = self.extract_comment_data(entry)
             if comment_data:
+                print(f"Extracted comment data: {comment_data}")
                 self.save_pending_comment(comment_data)
+                print("Comment data saved successfully")
 
     def extract_comment_data(self, entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
