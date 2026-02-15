@@ -93,17 +93,17 @@ These constraints are **non-negotiable** and define the architecture:
                 │
                 ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                   Webhook Receiver (Flask/FastAPI)            │
+│                   Webhook Receiver (FastAPI)                  │
 │  - Verify webhook signature                                   │
 │  - Extract comment data                                       │
-│  - Write to pending_comments.json                             │
+│  - Save via CommentExtractor interface                        │
 └───────────────┬───────────────────────────────────────────────┘
                 │
                 ▼
 ┌───────────────────────────────────────────────────────────────┐
 │                  Main Processing Script                        │
 │  1. Load article from articles/ directory                     │
-│  2. Load pending_comments.json                                │
+│  2. Load pending comments via CommentExtractor                │
 │  3. For each comment:                                         │
 │     - Load full discussion context                            │
 │     - Build LLM prompt with article + context                 │
@@ -115,8 +115,18 @@ These constraints are **non-negotiable** and define the architecture:
                 │
                 ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                    File-Based State                            │
-│  - pending_comments.json (comments awaiting processing)       │
+│                 Modular Comment Storage                        │
+│                                                                │
+│  ┌────────────────────┐    ┌──────────────────────┐          │
+│  │ LocalDiskExtractor │    │  TigrisExtractor     │          │
+│  │  (JSON files)      │    │  (S3-compatible)     │          │
+│  └────────────────────┘    └──────────────────────┘          │
+│                                                                │
+│  Storage backends are configurable via COMMENT_STORAGE_TYPE   │
+│  - local: Uses state/pending_comments.json                    │
+│  - tigris: Uses Tigris object storage on Fly.io               │
+│                                                                │
+│  Other state files (always local):                            │
 │  - audit_log.json (all generated responses + metadata)        │
 │  - no_match_log.json (comments that didn't warrant response)  │
 │  - posted_ids.txt (simple list of already-responded IDs)      │
@@ -132,17 +142,22 @@ These constraints are **non-negotiable** and define the architecture:
 ├── articles_unnumbered/                    # Unnumbered articles without citations
 │   └── general-fitness-guidelines.md
 ├── state/
-│   ├── pending_comments.json
+│   ├── pending_comments.json               # When using local storage
 │   ├── audit_log.json
 │   ├── no_match_log.json
 │   └── posted_ids.txt
 ├── src/
-│   ├── webhook_receiver.py      # Webhook endpoint
-│   ├── processor.py              # Main processing loop
-│   ├── instagram_api.py          # Instagram Graph API wrapper
-│   ├── llm_client.py             # LLM API wrapper
-│   ├── validator.py              # Response validation
-│   └── config.py                 # Configuration
+│   ├── comment_extractor.py         # Abstract extractor interface
+│   ├── comment_extractor_factory.py # Factory for creating extractors
+│   ├── local_disk_extractor.py      # Local disk implementation
+│   ├── tigris_extractor.py          # Tigris/S3 implementation
+│   ├── webhook_receiver.py          # Webhook endpoint
+│   ├── processor.py                 # Main processing loop
+│   ├── instagram_api.py             # Instagram Graph API wrapper
+│   ├── llm_client.py                # LLM API wrapper
+│   ├── validator.py                 # Response validation
+│   ├── token_manager.py             # OAuth token management
+│   └── config.py                    # Configuration
 ├── templates/
 │   ├── debate_prompt.txt                   # For numbered articles
 │   ├── debate_prompt_unnumbered.txt        # For unnumbered articles
@@ -177,6 +192,37 @@ Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON
   - `true` - Article uses numbered sections (§X.Y.Z), responses include citations
   - `false` - Article without numbered sections, responses reference content naturally
 
+### 5.4 Comment Storage Configuration
+
+The system supports modular comment storage backends to enable distributed deployment:
+
+**Environment Variables:**
+- `COMMENT_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
+- `AWS_ACCESS_KEY_ID` - Tigris access key ID (for Tigris storage)
+- `AWS_SECRET_ACCESS_KEY` - Tigris secret access key (for Tigris storage)
+- `AWS_ENDPOINT_URL_S3` - S3 endpoint URL (default: https://fly.storage.tigris.dev)
+- `TIGRIS_BUCKET_NAME` - Tigris bucket name (for Tigris storage)
+- `AWS_REGION` - AWS region (default: auto)
+
+**Storage Backends:**
+
+1. **Local Disk Storage** (`COMMENT_STORAGE_TYPE=local`)
+   - Stores pending comments in `state/pending_comments.json`
+   - Suitable for single-machine deployments
+   - Default option, no additional configuration required
+
+2. **Tigris Object Storage** (`COMMENT_STORAGE_TYPE=tigris`)
+   - Stores pending comments in Tigris/S3-compatible object storage
+   - Suitable for distributed deployments on Fly.io
+   - Allows webhook server, dashboard, and processor to run on different machines
+   - Requires Tigris bucket creation: `fly storage create`
+   - S3-compatible API using boto3 library
+
+**Use Case:**
+When running the bot on Fly.io with separate process groups (webhook, dashboard, scheduler), 
+the webhook server can save comments to Tigris storage, and the processor running in a 
+different machine can read them. This enables true horizontal scaling without shared filesystem.
+
 ---
 
 ## 6. Step-by-Step Processing Pipeline
@@ -200,8 +246,9 @@ Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON
    - If `comment_id` exists, ignore (already processed)
 
 4. **Save to Pending:**
-   - Append comment data to `pending_comments.json`
+   - Save comment data via CommentExtractor interface
    - Format: `{"comment_id": "...", "post_id": "...", "text": "...", "user": "...", "timestamp": "..."}`
+   - Storage location depends on configured backend (local or Tigris)
 
 5. **Respond 200 OK:**
    - Immediately return success to Instagram (required within 5 seconds)
@@ -216,7 +263,7 @@ Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON
    - Store all articles in memory for this run
 
 2. **Load Pending Comments:**
-   - Read `pending_comments.json`
+   - Load comments via CommentExtractor interface
    - If empty, exit gracefully
    - Otherwise, process each comment sequentially
 
@@ -277,7 +324,8 @@ Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON
      - Wait for human approval (external process/dashboard)
 
 5. **Cleanup:**
-   - Remove processed comments from `pending_comments.json`
+   - Clear processed comments via CommentExtractor interface
+   - This removes comments from storage (local file or Tigris)
    - Rotate logs if they exceed size limit
 
 ### 6.3 Human Review Workflow (Optional)
