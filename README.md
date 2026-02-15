@@ -21,8 +21,8 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 ├── src/               # Core application code
 │   ├── comment_extractor.py      # Abstract comment extractor interface
 │   ├── comment_extractor_factory.py # Factory for creating extractors
-│   ├── local_disk_extractor.py   # Local disk storage implementation
-│   ├── tigris_extractor.py       # Tigris/S3 storage implementation
+│   ├── local_disk_extractor.py   # Local disk storage implementation (implements comment_extractor)
+│   ├── tigris_extractor.py       # Tigris/S3 storage implementation (implements comment_extractor)
 │   ├── config.py                 # Configuration management
 │   ├── file_utils.py             # File utility functions
 │   ├── instagram_api.py          # Instagram Graph API wrapper
