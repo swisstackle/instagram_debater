@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from src.comment_extractor import CommentExtractor
 from src.file_utils import load_json_file, save_json_file
 from src.validator import ResponseValidator
 
@@ -14,7 +15,7 @@ from src.validator import ResponseValidator
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
 
-    def __init__(self, instagram_api, llm_client, validator, config):
+    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None):
         """
         Initialize comment processor.
 
@@ -23,11 +24,18 @@ class CommentProcessor:
             llm_client: LLMClient instance
             validator: ResponseValidator instance
             config: Config instance
+            comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
         """
         self.instagram_api = instagram_api
         self.llm_client = llm_client
         self.validator = validator
         self.config = config
+        
+        # Use provided extractor or create one via factory
+        if comment_extractor is None:
+            from src.comment_extractor_factory import create_comment_extractor
+            comment_extractor = create_comment_extractor()
+        self.comment_extractor = comment_extractor
 
     def load_article(self, article_path: str) -> str:
         """
@@ -106,14 +114,12 @@ class CommentProcessor:
 
     def load_pending_comments(self) -> List[Dict[str, Any]]:
         """
-        Load pending comments from JSON file.
+        Load pending comments using the configured extractor.
 
         Returns:
             List of pending comment dictionaries
         """
-        pending_file = os.path.join("state", "pending_comments.json")
-        data = load_json_file(pending_file, {"version": "1.0", "comments": []})
-        return data.get("comments", [])
+        return self.comment_extractor.load_pending_comments()
 
     def select_relevant_article(
         self,
@@ -452,10 +458,8 @@ class CommentProcessor:
             json.dump(data, f, indent=2)
 
     def clear_pending_comments(self) -> None:
-        """Clear processed comments from pending list."""
-        pending_file = os.path.join("state", "pending_comments.json")
-        if os.path.exists(pending_file):
-            save_json_file(pending_file, {"version": "1.0", "comments": []}, ensure_dir=False)
+        """Clear processed comments from pending list using the configured extractor."""
+        self.comment_extractor.clear_pending_comments()
 
     def run(self) -> None:
         """Main processing loop entry point."""
