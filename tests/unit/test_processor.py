@@ -506,7 +506,201 @@ More text here.
         call_args = processor.audit_log_extractor.update_entry.call_args[0]
         assert call_args[0] == "log_001"  # entry_id
         assert "post_error" in call_args[1]  # updates
-        assert call_args[1]["post_error"] == "API Error"
+        # Error should now be a structured dict with "message" key
+        assert isinstance(call_args[1]["post_error"], dict)
+        assert call_args[1]["post_error"]["message"] == "API Error"
+
+    def test_extract_graph_api_error_with_response_json(self, processor):
+        """Test extracting error from exception with response.json() method."""
+        # Create mock exception with response that has json() method
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "error": {
+                "code": 100,
+                "message": "Invalid parameter",
+                "error_subcode": 1234
+            }
+        }
+        
+        exc = Exception("API Error")
+        exc.response = mock_response
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["error"]["code"] == 100
+        assert result["error"]["message"] == "Invalid parameter"
+
+    def test_extract_graph_api_error_with_response_text(self, processor):
+        """Test extracting error from exception with response.text as JSON."""
+        # Create mock exception with response that has text attribute
+        mock_response = Mock()
+        mock_response.json.side_effect = Exception("Cannot parse")
+        mock_response.text = '{"error": {"code": 200, "message": "Rate limit"}}'
+        
+        exc = Exception("API Error")
+        exc.response = mock_response
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["error"]["code"] == 200
+        assert result["error"]["message"] == "Rate limit"
+
+    def test_extract_graph_api_error_with_response_text_non_json(self, processor):
+        """Test extracting error from exception with response.text as plain text."""
+        # Create mock exception with response that has non-JSON text
+        mock_response = Mock()
+        mock_response.json.side_effect = Exception("Cannot parse")
+        mock_response.text = "Server error occurred"
+        
+        exc = Exception("API Error")
+        exc.response = mock_response
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["text"] == "Server error occurred"
+
+    def test_extract_graph_api_error_with_dict_in_args(self, processor):
+        """Test extracting error from exception with dict in args."""
+        error_dict = {"code": 300, "message": "Permission denied"}
+        exc = Exception(error_dict)
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["code"] == 300
+        assert result["message"] == "Permission denied"
+
+    def test_extract_graph_api_error_with_json_string_in_args(self, processor):
+        """Test extracting error from exception with JSON string in args."""
+        exc = Exception('{"error": "Invalid token"}')
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["error"] == "Invalid token"
+
+    def test_extract_graph_api_error_with_bytes_in_args(self, processor):
+        """Test extracting error from exception with bytes in args."""
+        exc = Exception(b'{"error": "Bytes error"}')
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["error"] == "Bytes error"
+
+    def test_extract_graph_api_error_with_body_attribute(self, processor):
+        """Test extracting error from exception with body attribute."""
+        exc = Exception("API Error")
+        exc.body = {"error_code": 400, "error_msg": "Bad request"}
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["error_code"] == 400
+        assert result["error_msg"] == "Bad request"
+
+    def test_extract_graph_api_error_with_result_attribute(self, processor):
+        """Test extracting error from exception with result attribute."""
+        exc = Exception("API Error")
+        exc.result = '{"status": "error", "details": "Not found"}'
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result["status"] == "error"
+        assert result["details"] == "Not found"
+
+    def test_extract_graph_api_error_with_error_data_attribute(self, processor):
+        """Test extracting error from exception with error_data attribute."""
+        exc = Exception("API Error")
+        exc.error_data = ["error1", "error2"]
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        assert result is not None
+        assert result == ["error1", "error2"]
+
+    def test_extract_graph_api_error_no_data(self, processor):
+        """Test extracting error from exception with no extractable data."""
+        exc = Exception("Simple error message")
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        # Should return None when no extractable data found
+        assert result is None
+
+    def test_extract_graph_api_error_extraction_fails(self, processor):
+        """Test extracting error when extraction itself raises exception."""
+        # Create an exception with a response attribute that raises when accessed
+        exc = Exception("API Error")
+        
+        # Create a mock response where accessing text raises an exception
+        class BadResponse:
+            @property
+            def json(self):
+                raise RuntimeError("Cannot call json()")
+            
+            @property
+            def text(self):
+                raise RuntimeError("Cannot access text")
+        
+        exc.response = BadResponse()
+        
+        result = processor._extract_graph_api_error(exc)
+        
+        # Should return error extraction failure message
+        assert result is not None
+        assert "error_extraction_failed" in result
+
+    def test_post_approved_responses_with_graph_api_error(self, processor, mock_config, mock_instagram_api):
+        """Test posting responses when API raises exception with Graph API error details."""
+        mock_config.auto_post_enabled = False
+        
+        # Create exception with Graph API error response
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "error": {
+                "message": "Invalid OAuth token",
+                "code": 190,
+                "error_subcode": 463,
+                "error_user_title": "Token Expired",
+                "error_user_msg": "Please refresh your access token"
+            }
+        }
+        
+        exc = Exception("Graph API Error")
+        exc.response = mock_response
+        mock_instagram_api.post_reply.side_effect = exc
+
+        # Mock the audit log extractor
+        mock_entry = {
+            "id": "log_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": False
+        }
+        
+        processor.audit_log_extractor.load_entries = Mock(return_value=[mock_entry])
+        processor.audit_log_extractor.update_entry = Mock()
+        
+        processor.post_approved_responses()
+
+        # Check that structured error was recorded
+        processor.audit_log_extractor.update_entry.assert_called_once()
+        call_args = processor.audit_log_extractor.update_entry.call_args[0]
+        assert call_args[0] == "log_001"
+        error_payload = call_args[1]["post_error"]
+        
+        # Verify structured payload
+        assert isinstance(error_payload, dict)
+        assert error_payload["message"] == "Graph API Error"
+        assert "graph_api_error" in error_payload
+        assert error_payload["graph_api_error"]["error"]["code"] == 190
+        assert error_payload["graph_api_error"]["error"]["error_subcode"] == 463
 
     def test_clear_pending_comments_file_exists(self, processor):
         """Test clearing pending comments when file exists."""

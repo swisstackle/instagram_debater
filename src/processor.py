@@ -406,6 +406,80 @@ class CommentProcessor:
         with open(no_match_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
 
+    def _extract_graph_api_error(self, exc: Exception) -> Optional[Any]:
+        """
+        Extract Graph API error body from an exception.
+
+        Attempts multiple strategies to extract error details from various
+        exception formats that SDKs might use.
+
+        Args:
+            exc: Exception that may contain Graph API error information
+
+        Returns:
+            Parsed JSON dict/list, or dict with text wrapper, or None if nothing found
+        """
+        try:
+            # Strategy 1: Check if exception has a response attribute with json() method
+            if hasattr(exc, 'response'):
+                resp = exc.response
+                # Try calling json() method
+                if hasattr(resp, 'json') and callable(resp.json):
+                    try:
+                        return resp.json()
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass
+                
+                # Try accessing text attribute and parsing as JSON
+                if hasattr(resp, 'text'):
+                    try:
+                        return json.loads(resp.text)
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # Return raw text wrapped in dict
+                        return {"text": resp.text}
+            
+            # Strategy 2: Check common attribute names (before checking args)
+            for attr_name in ['body', 'result', 'error_data']:
+                if hasattr(exc, attr_name):
+                    attr_value = getattr(exc, attr_name)
+                    if attr_value is not None:
+                        # If it's already structured, return it
+                        if isinstance(attr_value, (dict, list)):
+                            return attr_value
+                        # Try parsing as JSON
+                        if isinstance(attr_value, (bytes, str)):
+                            try:
+                                if isinstance(attr_value, bytes):
+                                    attr_value = attr_value.decode('utf-8')
+                                return json.loads(attr_value)
+                            except Exception:  # pylint: disable=broad-exception-caught
+                                return {"text": str(attr_value)}
+            
+            # Strategy 3: Check exception args for structured data
+            if hasattr(exc, 'args') and exc.args:
+                for arg in exc.args:
+                    # If arg is already a dict or list, return it
+                    if isinstance(arg, (dict, list)):
+                        return arg
+                    
+                    # Try parsing bytes/str as JSON
+                    if isinstance(arg, (bytes, str)):
+                        try:
+                            # Handle bytes
+                            if isinstance(arg, bytes):
+                                arg = arg.decode('utf-8')
+                            return json.loads(arg)
+                        except Exception:  # pylint: disable=broad-exception-caught
+                            # Don't return plain text from args - continue looking
+                            pass
+            
+            # Nothing found
+            return None
+            
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            # If extraction itself fails, return error info
+            return {"error_extraction_failed": str(e)}
+
     def post_approved_responses(self) -> None:
         """Post all approved responses to Instagram.
 
@@ -441,7 +515,24 @@ class CommentProcessor:
                         f.write(entry["comment_id"] + "\n")
 
                 except Exception as e:  # pylint: disable=broad-exception-caught
-                    updates = {"post_error": str(e)}
+                    # Extract Graph API error details
+                    graph_body = self._extract_graph_api_error(e)
+                    
+                    # Build structured error payload
+                    post_error_payload = {"message": str(e)}
+                    if graph_body is not None:
+                        post_error_payload["graph_api_error"] = graph_body
+                    
+                    # Log the error details
+                    try:
+                        error_log = json.dumps(post_error_payload, indent=2)
+                        print(f"Error posting response: {error_log}")
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # Fallback if JSON serialization fails
+                        print(f"Error posting response: {post_error_payload}")
+                    
+                    # Update audit log with structured error
+                    updates = {"post_error": post_error_payload}
                     self.audit_log_extractor.update_entry(entry["id"], updates)
 
     def clear_pending_comments(self) -> None:
