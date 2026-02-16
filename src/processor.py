@@ -457,51 +457,60 @@ class CommentProcessor:
 
         if not comments:
             print("No pending comments to process")
-            return
-
-        print(f"Processing {len(comments)} pending comment(s)...")
-
-        # Multi-article or single-article mode
-        if len(articles_config) > 1:
-            # Multi-article mode
-            print(f"Running in multi-article mode with {len(articles_config)} articles")
-            articles = self.load_articles(articles_config)
-
-            for comment in comments:
-                print(f"Processing comment {comment.get('comment_id')}...")
-                result = self.process_comment_multi_article(comment, articles)
-
-                if result:
-                    self.save_audit_log(result)
-                    article_title = result.get("article_used", {}).get("title", "unknown")
-                    status = result.get('status')
-                    print(f"  - Generated response using '{article_title}', status: {status}")
-                else:
-                    print("  - Skipped (not relevant)")
         else:
-            # Single-article mode
-            if not articles_config:
-                print("No articles configured. Set ARTICLES_CONFIG environment variable.")
-                return
+            print(f"Processing {len(comments)} pending comment(s)...")
 
-            article_text = self.load_article(articles_config[0]["path"])
-            is_numbered = articles_config[0].get("is_numbered", True)
+            # Track whether we successfully processed comments
+            comments_processed = False
 
-            for comment in comments:
-                print(f"Processing comment {comment.get('comment_id')}...")
-                result = self.process_comment(comment, article_text, is_numbered=is_numbered)
+            # Multi-article or single-article mode
+            if len(articles_config) > 1:
+                # Multi-article mode
+                print(f"Running in multi-article mode with {len(articles_config)} articles")
+                articles = self.load_articles(articles_config)
 
-                if result:
-                    self.save_audit_log(result)
-                    print(f"  - Generated response, status: {result.get('status')}")
+                for comment in comments:
+                    print(f"Processing comment {comment.get('comment_id')}...")
+                    result = self.process_comment_multi_article(comment, articles)
+
+                    if result:
+                        self.save_audit_log(result)
+                        article_title = result.get("article_used", {}).get("title", "unknown")
+                        status = result.get('status')
+                        print(f"  - Generated response using '{article_title}', status: {status}")
+                    else:
+                        print("  - Skipped (not relevant)")
+                
+                comments_processed = True
+            else:
+                # Single-article mode
+                if not articles_config:
+                    print("No articles configured. Set ARTICLES_CONFIG environment variable.")
+                    # Don't mark as processed since we couldn't process them
                 else:
-                    print("  - Skipped (not relevant)")
+                    article_text = self.load_article(articles_config[0]["path"])
+                    is_numbered = articles_config[0].get("is_numbered", True)
+
+                    for comment in comments:
+                        print(f"Processing comment {comment.get('comment_id')}...")
+                        result = self.process_comment(comment, article_text, is_numbered=is_numbered)
+
+                        if result:
+                            self.save_audit_log(result)
+                            print(f"  - Generated response, status: {result.get('status')}")
+                        else:
+                            print("  - Skipped (not relevant)")
+                    
+                    comments_processed = True
+
+            # Only clear pending comments if we actually processed them
+            if comments_processed:
+                self.clear_pending_comments()
 
         # Post approved responses (both auto-approved and manually approved)
+        # This runs even when there are no pending comments to process,
+        # ensuring manually approved responses are posted
         print("Posting approved responses...")
         self.post_approved_responses()
-
-        # Clear pending comments
-        self.clear_pending_comments()
 
         print("Processing complete!")
