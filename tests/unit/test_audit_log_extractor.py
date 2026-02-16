@@ -3,28 +3,18 @@ Unit tests for audit log extractors.
 """
 import json
 import os
-import shutil
-import tempfile
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, Mock
 
 import pytest
 
 from src.audit_log_extractor import AuditLogExtractor
 from src.local_disk_audit_extractor import LocalDiskAuditExtractor
 from src.tigris_audit_extractor import TigrisAuditExtractor
+from tests.unit.test_extractor_base import BaseLocalDiskExtractorTests, BaseTigrisExtractorTests
 
 
-class TestLocalDiskAuditExtractor:
+class TestLocalDiskAuditExtractor(BaseLocalDiskExtractorTests):
     """Test suite for LocalDiskAuditExtractor."""
-
-    @pytest.fixture
-    def temp_state_dir(self):
-        """Create a temporary state directory."""
-        temp_dir = tempfile.mkdtemp()
-        state_dir = os.path.join(temp_dir, "state")
-        os.makedirs(state_dir, exist_ok=True)
-        yield state_dir
-        shutil.rmtree(temp_dir)
 
     @pytest.fixture
     def extractor(self, temp_state_dir):
@@ -172,19 +162,13 @@ class TestLocalDiskAuditExtractor:
         extractor.update_entry("log_001", updates)  # Should not raise
 
 
-class TestTigrisAuditExtractor:
+class TestTigrisAuditExtractor(BaseTigrisExtractorTests):
     """Test suite for TigrisAuditExtractor."""
-
-    @pytest.fixture
-    def mock_s3_client(self):
-        """Create a mock boto3 S3 client."""
-        mock_client = MagicMock()
-        return mock_client
 
     @pytest.fixture
     def extractor(self, mock_s3_client):
         """Create a TigrisAuditExtractor instance with mocked S3 client."""
-        with patch('src.tigris_audit_extractor.boto3') as mock_boto3:
+        with patch('src.base_json_extractor.boto3') as mock_boto3:
             mock_boto3.client.return_value = mock_s3_client
             extractor = TigrisAuditExtractor(
                 access_key_id="test_key",
@@ -219,9 +203,7 @@ class TestTigrisAuditExtractor:
                 }
             ]
         }
-        mock_body = Mock()
-        mock_body.read.return_value = json.dumps(test_data).encode('utf-8')
-        mock_s3_client.get_object.return_value = {"Body": mock_body}
+        self.setup_mock_get_object(mock_s3_client, test_data)
 
         entries = extractor.load_entries()
 
@@ -235,10 +217,7 @@ class TestTigrisAuditExtractor:
 
     def test_load_entries_object_not_exists(self, extractor, mock_s3_client):
         """Test loading entries when S3 object doesn't exist."""
-        from botocore.exceptions import ClientError
-        
-        error_response = {'Error': {'Code': 'NoSuchKey'}}
-        mock_s3_client.get_object.side_effect = ClientError(error_response, 'GetObject')
+        self.setup_mock_no_such_key(mock_s3_client)
 
         entries = extractor.load_entries()
 
@@ -247,9 +226,7 @@ class TestTigrisAuditExtractor:
     def test_save_entry_creates_object(self, extractor, mock_s3_client):
         """Test saving an entry creates the S3 object with auto-generated ID."""
         # Setup: object doesn't exist initially
-        from botocore.exceptions import ClientError
-        error_response = {'Error': {'Code': 'NoSuchKey'}}
-        mock_s3_client.get_object.side_effect = ClientError(error_response, 'GetObject')
+        self.setup_mock_no_such_key(mock_s3_client)
 
         entry_data = {
             "comment_id": "789",
@@ -286,9 +263,7 @@ class TestTigrisAuditExtractor:
                 {"id": "log_001", "comment_id": "111", "status": "approved"}
             ]
         }
-        mock_body = Mock()
-        mock_body.read.return_value = json.dumps(existing_data).encode('utf-8')
-        mock_s3_client.get_object.return_value = {"Body": mock_body}
+        self.setup_mock_get_object(mock_s3_client, existing_data)
 
         new_entry = {
             "comment_id": "222",
@@ -320,9 +295,7 @@ class TestTigrisAuditExtractor:
                 }
             ]
         }
-        mock_body = Mock()
-        mock_body.read.return_value = json.dumps(existing_data).encode('utf-8')
-        mock_s3_client.get_object.return_value = {"Body": mock_body}
+        self.setup_mock_get_object(mock_s3_client, existing_data)
 
         updates = {
             "status": "approved",
@@ -346,9 +319,7 @@ class TestTigrisAuditExtractor:
             "version": "1.0",
             "entries": [{"id": "log_001", "comment_id": "123"}]
         }
-        mock_body = Mock()
-        mock_body.read.return_value = json.dumps(existing_data).encode('utf-8')
-        mock_s3_client.get_object.return_value = {"Body": mock_body}
+        self.setup_mock_get_object(mock_s3_client, existing_data)
 
         updates = {"status": "approved"}
         extractor.update_entry("log_999", updates)  # Should not raise
@@ -358,9 +329,7 @@ class TestTigrisAuditExtractor:
 
     def test_update_entry_object_not_exists(self, extractor, mock_s3_client):
         """Test updating when S3 object doesn't exist (should not raise error)."""
-        from botocore.exceptions import ClientError
-        error_response = {'Error': {'Code': 'NoSuchKey'}}
-        mock_s3_client.get_object.side_effect = ClientError(error_response, 'GetObject')
+        self.setup_mock_no_such_key(mock_s3_client)
 
         updates = {"status": "approved"}
         extractor.update_entry("log_001", updates)  # Should not raise
@@ -374,7 +343,7 @@ class TestTigrisAuditExtractor:
             'TIGRIS_BUCKET_NAME': 'env-bucket',
             'AWS_REGION': 'env-region'
         }):
-            with patch('src.tigris_audit_extractor.boto3') as mock_boto3:
+            with patch('src.base_json_extractor.boto3') as mock_boto3:
                 extractor = TigrisAuditExtractor()
                 
                 # Verify boto3 client was initialized with correct params
@@ -409,7 +378,7 @@ class TestAuditLogExtractorFactory:
             'TIGRIS_BUCKET_NAME': 'test-bucket',
             'AWS_REGION': 'auto'
         }):
-            with patch('src.tigris_audit_extractor.boto3'):
+            with patch('src.base_json_extractor.boto3'):
                 extractor = create_audit_log_extractor()
                 assert isinstance(extractor, TigrisAuditExtractor)
 

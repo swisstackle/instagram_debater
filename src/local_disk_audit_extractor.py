@@ -1,14 +1,13 @@
 """
 Local disk implementation of audit log storage.
 """
-import os
 from typing import Any, Dict, List
 
 from src.audit_log_extractor import AuditLogExtractor
-from src.file_utils import load_json_file, save_json_file
+from src.base_json_extractor import BaseLocalDiskExtractor
 
 
-class LocalDiskAuditExtractor(AuditLogExtractor):
+class LocalDiskAuditExtractor(BaseLocalDiskExtractor, AuditLogExtractor):
     """
     Local disk implementation of audit log storage.
     
@@ -16,15 +15,9 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
     Default location: state/audit_log.json
     """
 
-    def __init__(self, state_dir: str = "state"):
-        """
-        Initialize local disk audit log extractor.
-        
-        Args:
-            state_dir: Directory for storing state files (default: "state")
-        """
-        self.state_dir = state_dir
-        self.audit_file = os.path.join(state_dir, "audit_log.json")
+    def _get_filename(self) -> str:
+        """Get the filename for audit log storage."""
+        return "audit_log.json"
 
     def save_entry(self, entry: Dict[str, Any]) -> None:
         """
@@ -33,11 +26,8 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
         Args:
             entry: Audit log entry data (without ID - will be auto-generated)
         """
-        # Ensure state directory exists
-        os.makedirs(self.state_dir, exist_ok=True)
-
         # Load existing entries
-        data = load_json_file(self.audit_file, {"version": "1.0", "entries": []})
+        data = self._load_data({"version": "1.0", "entries": []})
 
         # Auto-generate entry ID
         entry_copy = entry.copy()
@@ -47,7 +37,7 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
         data["entries"].append(entry_copy)
 
         # Save
-        save_json_file(self.audit_file, data)
+        self._save_data(data)
 
     def load_entries(self) -> List[Dict[str, Any]]:
         """
@@ -56,7 +46,7 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
         Returns:
             List of audit log entries, empty list if file doesn't exist
         """
-        data = load_json_file(self.audit_file, {"version": "1.0", "entries": []})
+        data = self._load_data({"version": "1.0", "entries": []})
         return data.get("entries", [])
 
     def update_entry(self, entry_id: str, updates: Dict[str, Any]) -> None:
@@ -67,7 +57,7 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
             entry_id: ID of the entry to update
             updates: Dictionary of fields to update
         """
-        data = load_json_file(self.audit_file, {"version": "1.0", "entries": []})
+        data = self._load_data({"version": "1.0", "entries": []})
         
         # If no entries, nothing to update
         if not data.get("entries"):
@@ -80,4 +70,4 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
                 break
 
         # Save updated data
-        save_json_file(self.audit_file, data)
+        self._save_data(data)

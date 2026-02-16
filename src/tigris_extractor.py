@@ -2,78 +2,20 @@
 Tigris/S3-compatible implementation of comment extractor.
 """
 import json
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-try:
-    import boto3
-    from botocore.exceptions import ClientError
-except ImportError:
-    boto3 = None
-    ClientError = None
+from botocore.exceptions import ClientError
 
 from src.comment_extractor import CommentExtractor
+from src.base_json_extractor import BaseTigrisExtractor
 
 
-class TigrisExtractor(CommentExtractor):
+class TigrisExtractor(BaseTigrisExtractor, CommentExtractor):
     """Comment extractor that uses Tigris/S3-compatible object storage."""
 
-    def __init__(
-        self,
-        access_key_id: Optional[str] = None,
-        secret_access_key: Optional[str] = None,
-        endpoint_url: Optional[str] = None,
-        bucket_name: Optional[str] = None,
-        region: Optional[str] = None
-    ):
-        """
-        Initialize Tigris extractor.
-
-        Args:
-            access_key_id: AWS access key ID (defaults to AWS_ACCESS_KEY_ID env var)
-            secret_access_key: AWS secret access key (defaults to AWS_SECRET_ACCESS_KEY env var)
-            endpoint_url: S3 endpoint URL (defaults to AWS_ENDPOINT_URL_S3 env var)
-            bucket_name: Tigris bucket name (defaults to TIGRIS_BUCKET_NAME env var)
-            region: AWS region (defaults to AWS_REGION env var or 'auto')
-        """
-        if boto3 is None:
-            raise ImportError(
-                "boto3 is required for TigrisExtractor. "
-                "Install it with: pip install boto3"
-            )
-
-        # Get credentials from parameters or environment variables
-        self.access_key_id = access_key_id or os.getenv('AWS_ACCESS_KEY_ID')
-        self.secret_access_key = secret_access_key or os.getenv('AWS_SECRET_ACCESS_KEY')
-        self.endpoint_url = endpoint_url or os.getenv(
-            'AWS_ENDPOINT_URL_S3',
-            'https://fly.storage.tigris.dev'
-        )
-        self.bucket_name = bucket_name or os.getenv('TIGRIS_BUCKET_NAME')
-        self.region = region or os.getenv('AWS_REGION', 'auto')
-
-        if not self.access_key_id or not self.secret_access_key:
-            raise ValueError(
-                "AWS credentials are required. Set AWS_ACCESS_KEY_ID and "
-                "AWS_SECRET_ACCESS_KEY environment variables or pass them as parameters."
-            )
-
-        if not self.bucket_name:
-            raise ValueError(
-                "Bucket name is required. Set TIGRIS_BUCKET_NAME environment variable "
-                "or pass it as a parameter."
-            )
-
-        # Initialize S3 client
-        self.s3_client = boto3.client(
-            's3',
-            aws_access_key_id=self.access_key_id,
-            aws_secret_access_key=self.secret_access_key,
-            endpoint_url=self.endpoint_url,
-            region_name=self.region
-        )
-
-        self.object_key = "state/pending_comments.json"
+    def _get_object_key(self) -> str:
+        """Get the S3 object key for comment storage."""
+        return "state/pending_comments.json"
 
     def load_pending_comments(self) -> List[Dict[str, Any]]:
         """
@@ -85,7 +27,7 @@ class TigrisExtractor(CommentExtractor):
         try:
             response = self.s3_client.get_object(
                 Bucket=self.bucket_name,
-                Key=self.object_key
+                Key=self._get_object_key()
             )
             content = response['Body'].read().decode('utf-8')
             data = json.loads(content)
@@ -111,19 +53,9 @@ class TigrisExtractor(CommentExtractor):
         
         # Save back to storage
         data = {"version": "1.0", "comments": comments}
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=self.object_key,
-            Body=json.dumps(data, indent=2),
-            ContentType='application/json'
-        )
+        self._save_to_s3(data)
 
     def clear_pending_comments(self) -> None:
         """Clear all pending comments from Tigris storage."""
         data = {"version": "1.0", "comments": []}
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=self.object_key,
-            Body=json.dumps(data, indent=2),
-            ContentType='application/json'
-        )
+        self._save_to_s3(data)
