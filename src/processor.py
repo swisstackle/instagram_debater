@@ -460,6 +460,9 @@ class CommentProcessor:
         else:
             print(f"Processing {len(comments)} pending comment(s)...")
 
+            # Track whether we successfully processed comments
+            comments_processed = False
+
             # Multi-article or single-article mode
             if len(articles_config) > 1:
                 # Multi-article mode
@@ -477,10 +480,13 @@ class CommentProcessor:
                         print(f"  - Generated response using '{article_title}', status: {status}")
                     else:
                         print("  - Skipped (not relevant)")
+                
+                comments_processed = True
             else:
                 # Single-article mode
                 if not articles_config:
                     print("No articles configured. Set ARTICLES_CONFIG environment variable.")
+                    # Don't mark as processed since we couldn't process them
                 else:
                     article_text = self.load_article(articles_config[0]["path"])
                     is_numbered = articles_config[0].get("is_numbered", True)
@@ -494,10 +500,12 @@ class CommentProcessor:
                             print(f"  - Generated response, status: {result.get('status')}")
                         else:
                             print("  - Skipped (not relevant)")
+                    
+                    comments_processed = True
 
-            # Clear pending comments after processing
-            # This is inside the 'else' block, so we only clear when comments existed
-            self.clear_pending_comments()
+            # Only clear pending comments if we actually processed them
+            if comments_processed:
+                self.clear_pending_comments()
 
         # Post approved responses (both auto-approved and manually approved)
         # This runs even when there are no pending comments to process,

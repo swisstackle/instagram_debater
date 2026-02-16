@@ -577,6 +577,29 @@ More text here.
                     "Test response"
                 )
 
+    def test_run_with_comments_but_no_articles_configured(self, processor, sample_comment, mock_config, capsys):
+        """Test run method when pending comments exist but no articles are configured.
+        
+        When articles are not configured, pending comments cannot be processed,
+        but approved responses should still be posted. Pending comments should
+        NOT be cleared since they weren't processed.
+        """
+        mock_config.articles_config = []  # No articles configured
+        comments = [sample_comment]
+
+        with patch.object(processor, 'load_pending_comments', return_value=comments):
+            with patch.object(processor, 'post_approved_responses') as mock_post:
+                with patch.object(processor, 'clear_pending_comments') as mock_clear:
+                    processor.run()
+
+                    captured = capsys.readouterr()
+                    assert "Processing 1 pending comment(s)" in captured.out
+                    assert "No articles configured" in captured.out
+                    # Should still post approved responses
+                    mock_post.assert_called_once()
+                    # Should NOT clear pending comments since we didn't process them
+                    mock_clear.assert_not_called()
+
     def test_run_with_comments(self, processor, sample_article, sample_comment, capsys):
         """Test run method with pending comments."""
         comments = [sample_comment]
