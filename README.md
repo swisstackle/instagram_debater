@@ -19,18 +19,22 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 ├── articles/           # Source articles with numbered sections (§X.Y.Z)
 ├── articles_unnumbered/ # Source articles without numbered sections
 ├── src/               # Core application code
-│   ├── comment_extractor.py      # Abstract comment extractor interface
+│   ├── audit_log_extractor.py       # Abstract audit log extractor interface
+│   ├── audit_log_extractor_factory.py # Factory for creating audit log extractors
+│   ├── local_disk_audit_extractor.py # Local disk audit log storage (implements audit_log_extractor)
+│   ├── tigris_audit_extractor.py    # Tigris/S3 audit log storage (implements audit_log_extractor)
+│   ├── comment_extractor.py         # Abstract comment extractor interface
 │   ├── comment_extractor_factory.py # Factory for creating extractors
-│   ├── local_disk_extractor.py   # Local disk storage implementation (implements comment_extractor)
-│   ├── tigris_extractor.py       # Tigris/S3 storage implementation (implements comment_extractor)
-│   ├── config.py                 # Configuration management
-│   ├── file_utils.py             # File utility functions
-│   ├── instagram_api.py          # Instagram Graph API wrapper
-│   ├── llm_client.py             # OpenRouter LLM client
-│   ├── processor.py              # Main processing loop
-│   ├── token_manager.py          # OAuth token management
-│   ├── validator.py              # Response validation
-│   └── webhook_receiver.py       # Webhook handling
+│   ├── local_disk_extractor.py      # Local disk storage implementation (implements comment_extractor)
+│   ├── tigris_extractor.py          # Tigris/S3 storage implementation (implements comment_extractor)
+│   ├── config.py                    # Configuration management
+│   ├── file_utils.py                # File utility functions
+│   ├── instagram_api.py             # Instagram Graph API wrapper
+│   ├── llm_client.py                # OpenRouter LLM client
+│   ├── processor.py                 # Main processing loop
+│   ├── token_manager.py             # OAuth token management
+│   ├── validator.py                 # Response validation
+│   └── webhook_receiver.py          # Webhook handling
 ├── templates/         # Prompt templates for LLM
 │   ├── debate_prompt.txt           # For numbered articles
 │   └── debate_prompt_unnumbered.txt # For unnumbered articles
@@ -81,12 +85,19 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `WEBHOOK_PORT` - Webhook server port (default: 8000)
    - `WEBHOOK_HOST` - Webhook server host (default: 0.0.0.0)
 
-6. **Comment storage configuration:**
+6. **Storage configuration:**
+   
+   **Comment storage:**
    - `COMMENT_STORAGE_TYPE` - Storage backend for pending comments (`local` or `tigris`, default: `local`)
      - `local` - Uses local disk storage (`state/pending_comments.json`)
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible)
    
-   **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris`):**
+   **Audit log storage:**
+   - `AUDIT_LOG_STORAGE_TYPE` - Storage backend for audit logs (`local` or `tigris`, default: `local`)
+     - `local` - Uses local disk storage (`state/audit_log.json`)
+     - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible)
+   
+   **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris` or `AUDIT_LOG_STORAGE_TYPE=tigris`):**
    - `AWS_ACCESS_KEY_ID` - Tigris access key ID
    - `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
    - `AWS_ENDPOINT_URL_S3` - Tigris endpoint URL (default: https://fly.storage.tigris.dev)
@@ -96,11 +107,12 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    **Setting up Tigris storage:**
    1. Create a Tigris bucket on Fly.io: `fly storage create`
    2. Copy the generated credentials to your `.env` file
-   3. Set `COMMENT_STORAGE_TYPE=tigris`
-   4. The bot will automatically use Tigris for storing pending comments
+   3. Set `COMMENT_STORAGE_TYPE=tigris` and/or `AUDIT_LOG_STORAGE_TYPE=tigris`
+   4. The bot will automatically use Tigris for storing pending comments and/or audit logs
    
    This is useful when running distributed systems where the webhook server, dashboard, 
-   and comment processor are on different machines and need shared storage.
+   and comment processor are on different machines and need shared storage for both 
+   pending comments and audit logs.
 
 7. **Article configuration:**
    - `ARTICLES_CONFIG` - JSON array with article configurations
