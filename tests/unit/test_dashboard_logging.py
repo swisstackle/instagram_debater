@@ -33,7 +33,11 @@ class TestDashboardLogging:
     def app(self, temp_state_dir):
         """Create FastAPI app with temporary state directory."""
         from dashboard import create_dashboard_app
-        app = create_dashboard_app(state_dir=temp_state_dir)
+        from src.local_disk_audit_extractor import LocalDiskAuditExtractor
+        
+        # Create extractor with custom state_dir for isolated testing
+        extractor = LocalDiskAuditExtractor(state_dir=temp_state_dir)
+        app = create_dashboard_app(state_dir=temp_state_dir, audit_log_extractor=extractor)
         return app
 
     @pytest.fixture
