@@ -527,13 +527,55 @@ More text here.
             processor.clear_pending_comments()
 
     def test_run_no_comments(self, processor, sample_article, capsys):
-        """Test run method with no pending comments."""
+        """Test run method with no pending comments.
+        
+        Even when there are no pending comments to process, the run method should
+        still call post_approved_responses to handle any previously approved responses.
+        """
         with patch.object(processor, 'load_article', return_value=sample_article):
             with patch.object(processor, 'load_pending_comments', return_value=[]):
+                with patch.object(processor, 'post_approved_responses') as mock_post:
+                    processor.run()
+
+                    captured = capsys.readouterr()
+                    assert "No pending comments to process" in captured.out
+                    # Should still call post_approved_responses for any manually approved responses
+                    mock_post.assert_called_once()
+
+    def test_run_no_pending_comments_but_approved_responses_exist(self, processor, sample_article, mock_instagram_api, capsys):
+        """Test run method when no pending comments but approved responses exist.
+        
+        This tests the specific bug fix: when there are no pending comments,
+        the processor should still post any approved responses that are waiting.
+        """
+        # Setup approved response waiting to be posted
+        approved_entry = {
+            "id": "audit_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": False
+        }
+        
+        with patch.object(processor, 'load_article', return_value=sample_article):
+            with patch.object(processor, 'load_pending_comments', return_value=[]):
+                # Mock the audit log to return an approved response
+                processor.audit_log_extractor.load_entries = Mock(return_value=[approved_entry])
+                processor.audit_log_extractor.update_entry = Mock()
+                
+                # Mock the Instagram API
+                mock_instagram_api.post_reply.return_value = {"id": "reply_123"}
+                
                 processor.run()
 
                 captured = capsys.readouterr()
                 assert "No pending comments to process" in captured.out
+                assert "Posting approved responses" in captured.out
+                # Verify the approved response was posted
+                mock_instagram_api.post_reply.assert_called_once_with(
+                    "comment_123",
+                    "Test response"
+                )
 
     def test_run_with_comments(self, processor, sample_article, sample_comment, capsys):
         """Test run method with pending comments."""
