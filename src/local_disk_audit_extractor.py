@@ -37,9 +37,7 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
         os.makedirs(self.state_dir, exist_ok=True)
 
         # Load existing entries
-        data = load_json_file(self.audit_file)
-        if data is None:
-            data = {"version": "1.0", "entries": []}
+        data = load_json_file(self.audit_file, {"version": "1.0", "entries": []})
 
         # Auto-generate entry ID
         entry_copy = entry.copy()
@@ -58,9 +56,7 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
         Returns:
             List of audit log entries, empty list if file doesn't exist
         """
-        data = load_json_file(self.audit_file)
-        if data is None:
-            return []
+        data = load_json_file(self.audit_file, {"version": "1.0", "entries": []})
         return data.get("entries", [])
 
     def update_entry(self, entry_id: str, updates: Dict[str, Any]) -> None:
@@ -71,8 +67,10 @@ class LocalDiskAuditExtractor(AuditLogExtractor):
             entry_id: ID of the entry to update
             updates: Dictionary of fields to update
         """
-        data = load_json_file(self.audit_file)
-        if data is None:
+        data = load_json_file(self.audit_file, {"version": "1.0", "entries": []})
+        
+        # If no entries, nothing to update
+        if not data.get("entries"):
             return
 
         # Find and update entry
