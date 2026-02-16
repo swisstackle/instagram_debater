@@ -481,30 +481,27 @@ class CommentProcessor:
                 # Single-article mode
                 if not articles_config:
                     print("No articles configured. Set ARTICLES_CONFIG environment variable.")
-                    # Even if no articles are configured, still post approved responses
-                    print("Posting approved responses...")
-                    self.post_approved_responses()
-                    print("Processing complete!")
-                    return
+                else:
+                    article_text = self.load_article(articles_config[0]["path"])
+                    is_numbered = articles_config[0].get("is_numbered", True)
 
-                article_text = self.load_article(articles_config[0]["path"])
-                is_numbered = articles_config[0].get("is_numbered", True)
+                    for comment in comments:
+                        print(f"Processing comment {comment.get('comment_id')}...")
+                        result = self.process_comment(comment, article_text, is_numbered=is_numbered)
 
-                for comment in comments:
-                    print(f"Processing comment {comment.get('comment_id')}...")
-                    result = self.process_comment(comment, article_text, is_numbered=is_numbered)
-
-                    if result:
-                        self.save_audit_log(result)
-                        print(f"  - Generated response, status: {result.get('status')}")
-                    else:
-                        print("  - Skipped (not relevant)")
+                        if result:
+                            self.save_audit_log(result)
+                            print(f"  - Generated response, status: {result.get('status')}")
+                        else:
+                            print("  - Skipped (not relevant)")
 
             # Clear pending comments after processing
+            # Only clear if we had comments to process, as there's nothing to clear otherwise
             self.clear_pending_comments()
 
         # Post approved responses (both auto-approved and manually approved)
-        # This runs even when there are no pending comments to process
+        # This runs even when there are no pending comments to process,
+        # ensuring manually approved responses are posted
         print("Posting approved responses...")
         self.post_approved_responses()
 
