@@ -16,6 +16,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 from src.file_utils import load_json_file, save_json_file
 from src.config import Config
 from src.token_manager import TokenManager
+from src.audit_log_extractor_factory import create_audit_log_extractor
+from src.audit_log_extractor import AuditLogExtractor
 
 # Configure dashboard logger
 logger = logging.getLogger('dashboard')
@@ -52,27 +54,34 @@ def sanitize_log_input(value: str) -> str:
     return sanitized[:200]
 
 
-def create_dashboard_app(state_dir: str = "state") -> FastAPI:
+def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None) -> FastAPI:
     """
     Create a dashboard FastAPI application.
 
     Args:
         state_dir: Directory to store state files (default: "state")
+            Note: This parameter is deprecated for audit log storage. 
+            To use a custom state_dir, pass a LocalDiskAuditExtractor instance.
+        audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
 
     Returns:
         FastAPI application instance
     """
     app = FastAPI()  # pylint: disable=redefined-outer-name
+    
+    # Use provided audit log extractor or create one via factory
+    if audit_log_extractor is None:
+        audit_log_extractor = create_audit_log_extractor()
 
     # ================== STATE MANAGEMENT ==================
-    def get_audit_log_path():
-        return os.path.join(state_dir, "audit_log.json")
-
     def load_audit_log():
-        return load_json_file(get_audit_log_path(), {"version": "1.0", "entries": []})
+        """Load audit log entries."""
+        entries = audit_log_extractor.load_entries()
+        return {"version": "1.0", "entries": entries}
 
-    def save_audit_log(data):
-        save_json_file(get_audit_log_path(), data)
+    def update_audit_entry(entry_id: str, updates: dict):
+        """Update a specific audit log entry."""
+        audit_log_extractor.update_entry(entry_id, updates)
 
     # ================== DASHBOARD API ==================
     @app.get("/api/responses")
@@ -101,9 +110,11 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 
         for entry in entries:
             if entry.get("id") == response_id:
-                entry["status"] = "approved"
-                entry["approved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                save_audit_log(audit_log)
+                updates = {
+                    "status": "approved",
+                    "approved_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                }
+                update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/approve - 200")
                 return {"status": "ok", "response_id": response_id}
 
@@ -123,10 +134,12 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 
         for entry in entries:
             if entry.get("id") == response_id:
-                entry["status"] = "rejected"
-                entry["rejected_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                entry["rejection_reason"] = reason
-                save_audit_log(audit_log)
+                updates = {
+                    "status": "rejected",
+                    "rejected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "rejection_reason": reason
+                }
+                update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/reject - 200")
                 return {"status": "ok", "response_id": response_id}
 
@@ -146,9 +159,11 @@ def create_dashboard_app(state_dir: str = "state") -> FastAPI:
 
         for entry in entries:
             if entry.get("id") == response_id:
-                entry["generated_response"] = new_text
-                entry["edited_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                save_audit_log(audit_log)
+                updates = {
+                    "generated_response": new_text,
+                    "edited_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                }
+                update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/edit - 200")
                 return {"status": "ok", "response_id": response_id}
 

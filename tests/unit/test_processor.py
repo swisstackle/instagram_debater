@@ -383,40 +383,41 @@ More text here.
         """
         mock_config.auto_post_enabled = False
 
-        audit_data = {
-            "version": "1.0",
-            "entries": [
-                {
-                    "comment_id": "comment_123",
-                    "generated_response": "Test response",
-                    "status": "approved",
-                    "posted": False
-                }
-            ]
+        # Mock the audit log extractor
+        mock_entry = {
+            "id": "log_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": False
         }
+        
+        processor.audit_log_extractor.load_entries = Mock(return_value=[mock_entry])
+        processor.audit_log_extractor.update_entry = Mock()
+        
+        processor.post_approved_responses()
 
-        with patch("os.path.exists", return_value=True):
-            with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
-                with patch("json.dump") as mock_json_dump:
-                    processor.post_approved_responses()
-
-                    # Should post approved responses even when auto-post is disabled
-                    mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
-
-                    # Check that data was updated
-                    call_args = mock_json_dump.call_args[0][0]
-                    assert call_args["entries"][0]["posted"] is True
-                    assert "posted_at" in call_args["entries"][0]
+        # Should post approved responses even when auto-post is disabled
+        mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
+        
+        # Verify update_entry was called with correct data
+        processor.audit_log_extractor.update_entry.assert_called_once()
+        call_args = processor.audit_log_extractor.update_entry.call_args[0]
+        assert call_args[0] == "log_001"  # entry_id
+        assert call_args[1]["posted"] is True  # updates
+        assert "posted_at" in call_args[1]
 
     def test_post_approved_responses_no_audit_file(self, processor, mock_config):
         """Test posting responses when audit file doesn't exist."""
         # AUTO_POST_ENABLED setting should not matter here
         mock_config.auto_post_enabled = True
 
-        with patch("os.path.exists", return_value=False):
-            processor.post_approved_responses()
+        # Mock the audit log extractor returning empty list (no entries)
+        processor.audit_log_extractor.load_entries = Mock(return_value=[])
+        
+        processor.post_approved_responses()
 
-            processor.instagram_api.post_reply.assert_not_called()
+        processor.instagram_api.post_reply.assert_not_called()
 
     def test_post_approved_responses_success(self, processor, mock_config, mock_instagram_api):
         """Test successfully posting approved responses.
@@ -426,61 +427,59 @@ More text here.
         # Set to False to emphasize that AUTO_POST_ENABLED doesn't affect approved response posting
         mock_config.auto_post_enabled = False
 
-        audit_data = {
-            "version": "1.0",
-            "entries": [
-                {
-                    "comment_id": "comment_123",
-                    "generated_response": "Test response",
-                    "status": "approved",
-                    "posted": False
-                },
-                {
-                    "comment_id": "comment_456",
-                    "generated_response": "Another response",
-                    "status": "pending_review",
-                    "posted": False
-                }
-            ]
-        }
+        # Mock the audit log extractor with two entries
+        mock_entries = [
+            {
+                "id": "log_001",
+                "comment_id": "comment_123",
+                "generated_response": "Test response",
+                "status": "approved",
+                "posted": False
+            },
+            {
+                "id": "log_002",
+                "comment_id": "comment_456",
+                "generated_response": "Another response",
+                "status": "pending_review",
+                "posted": False
+            }
+        ]
+        
+        processor.audit_log_extractor.load_entries = Mock(return_value=mock_entries)
+        processor.audit_log_extractor.update_entry = Mock()
+        
+        processor.post_approved_responses()
 
-        with patch("os.path.exists", return_value=True):
-            with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
-                with patch("json.dump") as mock_json_dump:
-                    processor.post_approved_responses()
-
-                    # Should only post the approved one
-                    mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
-
-                    # Check that data was updated
-                    call_args = mock_json_dump.call_args[0][0]
-                    assert call_args["entries"][0]["posted"] is True
-                    assert "posted_at" in call_args["entries"][0]
+        # Should only post the approved one
+        mock_instagram_api.post_reply.assert_called_once_with("comment_123", "Test response")
+        
+        # Verify update_entry was called once for the approved entry
+        processor.audit_log_extractor.update_entry.assert_called_once()
+        call_args = processor.audit_log_extractor.update_entry.call_args[0]
+        assert call_args[0] == "log_001"  # entry_id
+        assert call_args[1]["posted"] is True  # updates
+        assert "posted_at" in call_args[1]
 
     def test_post_approved_responses_already_posted(self, processor, mock_config, mock_instagram_api):
         """Test posting responses when already posted."""
         # AUTO_POST_ENABLED should not matter for already posted responses
         mock_config.auto_post_enabled = False
 
-        audit_data = {
-            "version": "1.0",
-            "entries": [
-                {
-                    "comment_id": "comment_123",
-                    "generated_response": "Test response",
-                    "status": "approved",
-                    "posted": True
-                }
-            ]
+        # Mock the audit log extractor with already posted entry
+        mock_entry = {
+            "id": "log_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": True
         }
+        
+        processor.audit_log_extractor.load_entries = Mock(return_value=[mock_entry])
+        
+        processor.post_approved_responses()
 
-        with patch("os.path.exists", return_value=True):
-            with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
-                with patch("json.dump"):
-                    processor.post_approved_responses()
-
-                    # Should not post again
-                    mock_instagram_api.post_reply.assert_not_called()
+        # Should not post again
+        mock_instagram_api.post_reply.assert_not_called()
 
     def test_post_approved_responses_api_exception(self, processor, mock_config, mock_instagram_api):
         """Test posting responses when API raises exception."""
@@ -488,27 +487,26 @@ More text here.
         mock_config.auto_post_enabled = False
         mock_instagram_api.post_reply.side_effect = Exception("API Error")
 
-        audit_data = {
-            "version": "1.0",
-            "entries": [
-                {
-                    "comment_id": "comment_123",
-                    "generated_response": "Test response",
-                    "status": "approved",
-                    "posted": False
-                }
-            ]
+        # Mock the audit log extractor
+        mock_entry = {
+            "id": "log_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": False
         }
+        
+        processor.audit_log_extractor.load_entries = Mock(return_value=[mock_entry])
+        processor.audit_log_extractor.update_entry = Mock()
+        
+        processor.post_approved_responses()
 
-        with patch("os.path.exists", return_value=True):
-            with patch("builtins.open", mock_open(read_data=json.dumps(audit_data))):
-                with patch("json.dump") as mock_json_dump:
-                    processor.post_approved_responses()
-
-                    # Check that error was recorded
-                    call_args = mock_json_dump.call_args[0][0]
-                    assert "post_error" in call_args["entries"][0]
-                    assert call_args["entries"][0]["post_error"] == "API Error"
+        # Check that error was recorded via update_entry
+        processor.audit_log_extractor.update_entry.assert_called_once()
+        call_args = processor.audit_log_extractor.update_entry.call_args[0]
+        assert call_args[0] == "log_001"  # entry_id
+        assert "post_error" in call_args[1]  # updates
+        assert call_args[1]["post_error"] == "API Error"
 
     def test_clear_pending_comments_file_exists(self, processor):
         """Test clearing pending comments when file exists."""

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.comment_extractor import CommentExtractor
+from src.audit_log_extractor import AuditLogExtractor
 from src.file_utils import load_json_file, save_json_file
 from src.validator import ResponseValidator
 
@@ -15,7 +16,7 @@ from src.validator import ResponseValidator
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
 
-    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None):
+    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None):
         """
         Initialize comment processor.
 
@@ -25,6 +26,7 @@ class CommentProcessor:
             validator: ResponseValidator instance
             config: Config instance
             comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
+            audit_log_extractor: AuditLogExtractor instance (optional, defaults to factory-created)
         """
         self.instagram_api = instagram_api
         self.llm_client = llm_client
@@ -36,6 +38,12 @@ class CommentProcessor:
             from src.comment_extractor_factory import create_comment_extractor
             comment_extractor = create_comment_extractor()
         self.comment_extractor = comment_extractor
+        
+        # Use provided audit log extractor or create one via factory
+        if audit_log_extractor is None:
+            from src.audit_log_extractor_factory import create_audit_log_extractor
+            audit_log_extractor = create_audit_log_extractor()
+        self.audit_log_extractor = audit_log_extractor
 
     def load_article(self, article_path: str) -> str:
         """
@@ -361,25 +369,7 @@ class CommentProcessor:
         Args:
             log_entry: Log entry data
         """
-        os.makedirs("state", exist_ok=True)
-        audit_file = os.path.join("state", "audit_log.json")
-
-        # Load existing log
-        if os.path.exists(audit_file):
-            with open(audit_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        else:
-            data = {"version": "1.0", "entries": []}
-
-        # Add entry ID
-        log_entry["id"] = f"log_{len(data['entries']) + 1:03d}"
-
-        # Append entry
-        data["entries"].append(log_entry)
-
-        # Save
-        with open(audit_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+        self.audit_log_extractor.save_entry(log_entry)
 
     def save_no_match_log(self, comment: Dict[str, Any], reason: str) -> None:
         """
@@ -423,14 +413,9 @@ class CommentProcessor:
         AUTO_POST_ENABLED setting. This allows manually approved responses from the
         dashboard to be posted by the processor.
         """
-        audit_file = os.path.join("state", "audit_log.json")
-        if not os.path.exists(audit_file):
-            return
+        entries = self.audit_log_extractor.load_entries()
 
-        with open(audit_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        for entry in data["entries"]:
+        for entry in entries:
             if entry.get("status") == "approved" and not entry.get("posted", False):
                 try:
                     # Post reply
@@ -440,22 +425,23 @@ class CommentProcessor:
                     )
 
                     # Update entry
-                    entry["posted"] = True
-                    entry["posted_at"] = (
-                        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                    )
+                    updates = {
+                        "posted": True,
+                        "posted_at": (
+                            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                        )
+                    }
+                    self.audit_log_extractor.update_entry(entry["id"], updates)
 
                     # Save posted ID
                     posted_file = os.path.join("state", "posted_ids.txt")
+                    os.makedirs("state", exist_ok=True)
                     with open(posted_file, 'a', encoding='utf-8') as f:
                         f.write(entry["comment_id"] + "\n")
 
                 except Exception as e:  # pylint: disable=broad-exception-caught
-                    entry["post_error"] = str(e)
-
-        # Save updated audit log
-        with open(audit_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+                    updates = {"post_error": str(e)}
+                    self.audit_log_extractor.update_entry(entry["id"], updates)
 
     def clear_pending_comments(self) -> None:
         """Clear processed comments from pending list using the configured extractor."""

@@ -3,28 +3,18 @@ Unit tests for comment extractors.
 """
 import json
 import os
-import shutil
-import tempfile
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from src.comment_extractor import CommentExtractor
 from src.local_disk_extractor import LocalDiskExtractor
 from src.tigris_extractor import TigrisExtractor
+from tests.unit.test_extractor_base import BaseLocalDiskExtractorTests, BaseTigrisExtractorTests
 
 
-class TestLocalDiskExtractor:
+class TestLocalDiskExtractor(BaseLocalDiskExtractorTests):
     """Test suite for LocalDiskExtractor."""
-
-    @pytest.fixture
-    def temp_state_dir(self):
-        """Create a temporary state directory."""
-        temp_dir = tempfile.mkdtemp()
-        state_dir = os.path.join(temp_dir, "state")
-        os.makedirs(state_dir, exist_ok=True)
-        yield state_dir
-        shutil.rmtree(temp_dir)
 
     @pytest.fixture
     def extractor(self, temp_state_dir):
@@ -115,19 +105,13 @@ class TestLocalDiskExtractor:
         extractor.clear_pending_comments()  # Should not raise
 
 
-class TestTigrisExtractor:
+class TestTigrisExtractor(BaseTigrisExtractorTests):
     """Test suite for TigrisExtractor."""
-
-    @pytest.fixture
-    def mock_s3_client(self):
-        """Create a mock boto3 S3 client."""
-        mock_client = MagicMock()
-        return mock_client
 
     @pytest.fixture
     def extractor(self, mock_s3_client):
         """Create a TigrisExtractor instance with mocked S3 client."""
-        with patch('src.tigris_extractor.boto3') as mock_boto3:
+        with patch('src.base_json_extractor.boto3') as mock_boto3:
             mock_boto3.client.return_value = mock_s3_client
             extractor = TigrisExtractor(
                 access_key_id="test_key",
@@ -152,9 +136,7 @@ class TestTigrisExtractor:
                 {"comment_id": "456", "text": "Test comment 2"}
             ]
         }
-        mock_body = Mock()
-        mock_body.read.return_value = json.dumps(test_data).encode('utf-8')
-        mock_s3_client.get_object.return_value = {"Body": mock_body}
+        self.setup_mock_get_object(mock_s3_client, test_data)
 
         comments = extractor.load_pending_comments()
 
@@ -167,10 +149,7 @@ class TestTigrisExtractor:
 
     def test_load_pending_comments_object_not_exists(self, extractor, mock_s3_client):
         """Test loading pending comments when S3 object doesn't exist."""
-        from botocore.exceptions import ClientError
-        
-        error_response = {'Error': {'Code': 'NoSuchKey'}}
-        mock_s3_client.get_object.side_effect = ClientError(error_response, 'GetObject')
+        self.setup_mock_no_such_key(mock_s3_client)
 
         comments = extractor.load_pending_comments()
 
@@ -179,9 +158,7 @@ class TestTigrisExtractor:
     def test_save_pending_comment(self, extractor, mock_s3_client):
         """Test saving a pending comment to S3."""
         # Setup: object doesn't exist initially
-        from botocore.exceptions import ClientError
-        error_response = {'Error': {'Code': 'NoSuchKey'}}
-        mock_s3_client.get_object.side_effect = ClientError(error_response, 'GetObject')
+        self.setup_mock_no_such_key(mock_s3_client)
 
         comment_data = {
             "comment_id": "789",
@@ -210,9 +187,7 @@ class TestTigrisExtractor:
             "version": "1.0",
             "comments": [{"comment_id": "111", "text": "Existing comment"}]
         }
-        mock_body = Mock()
-        mock_body.read.return_value = json.dumps(existing_data).encode('utf-8')
-        mock_s3_client.get_object.return_value = {"Body": mock_body}
+        self.setup_mock_get_object(mock_s3_client, existing_data)
 
         new_comment = {"comment_id": "222", "text": "New comment"}
         extractor.save_pending_comment(new_comment)
@@ -245,7 +220,7 @@ class TestTigrisExtractor:
             'TIGRIS_BUCKET_NAME': 'env-bucket',
             'AWS_REGION': 'env-region'
         }):
-            with patch('src.tigris_extractor.boto3') as mock_boto3:
+            with patch('src.base_json_extractor.boto3') as mock_boto3:
                 extractor = TigrisExtractor()
                 
                 # Verify boto3 client was initialized with correct params
@@ -280,7 +255,7 @@ class TestExtractorFactory:
             'TIGRIS_BUCKET_NAME': 'test-bucket',
             'AWS_REGION': 'auto'
         }):
-            with patch('src.tigris_extractor.boto3'):
+            with patch('src.base_json_extractor.boto3'):
                 extractor = create_comment_extractor()
                 assert isinstance(extractor, TigrisExtractor)
 
