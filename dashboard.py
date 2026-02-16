@@ -68,9 +68,18 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     app = FastAPI()  # pylint: disable=redefined-outer-name
     
     # Create audit log extractor using factory (supports local/Tigris) or use provided one
+    # For tests, a custom extractor with specific state_dir can be provided
     if audit_log_extractor is None:
-        from src.local_disk_audit_extractor import LocalDiskAuditExtractor
-        audit_log_extractor = LocalDiskAuditExtractor(state_dir=state_dir)
+        # Check if we're in production mode or test mode
+        # In production (default state_dir), use factory for environment-driven selection
+        # In tests (custom state_dir), use local disk with that directory
+        if state_dir == "state":
+            # Production: use factory to support AUDIT_LOG_STORAGE_TYPE env var
+            audit_log_extractor = create_audit_log_extractor()
+        else:
+            # Test mode: use local disk with custom state_dir
+            from src.local_disk_audit_extractor import LocalDiskAuditExtractor
+            audit_log_extractor = LocalDiskAuditExtractor(state_dir=state_dir)
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():
