@@ -17,6 +17,7 @@ from src.file_utils import load_json_file, save_json_file
 from src.config import Config
 from src.token_manager import TokenManager
 from src.audit_log_extractor_factory import create_audit_log_extractor
+from src.audit_log_extractor import AuditLogExtractor
 
 # Configure dashboard logger
 logger = logging.getLogger('dashboard')
@@ -53,20 +54,23 @@ def sanitize_log_input(value: str) -> str:
     return sanitized[:200]
 
 
-def create_dashboard_app(state_dir: str = "state") -> FastAPI:
+def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None) -> FastAPI:
     """
     Create a dashboard FastAPI application.
 
     Args:
         state_dir: Directory to store state files (default: "state")
+        audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
 
     Returns:
         FastAPI application instance
     """
     app = FastAPI()  # pylint: disable=redefined-outer-name
     
-    # Create audit log extractor using factory (supports local/Tigris)
-    audit_log_extractor = create_audit_log_extractor()
+    # Create audit log extractor using factory (supports local/Tigris) or use provided one
+    if audit_log_extractor is None:
+        from src.local_disk_audit_extractor import LocalDiskAuditExtractor
+        audit_log_extractor = LocalDiskAuditExtractor(state_dir=state_dir)
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():
