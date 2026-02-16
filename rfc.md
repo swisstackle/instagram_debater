@@ -3,7 +3,7 @@
 **Status:** Draft
 **Author:** fparticle team
 **Created:** 2026-01-31
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-16
 
 ---
 
@@ -109,25 +109,43 @@ These constraints are **non-negotiable** and define the architecture:
 │     - Build LLM prompt with article + context                 │
 │     - Request response from LLM                               │
 │     - Validate response (citations, tone, relevance)          │
-│     - Save to audit_log.json or no_match_log.json            │
+│     - Save via AuditLogExtractor interface                    │
 │  4. Post approved responses to Instagram                      │
 └───────────────┬───────────────────────────────────────────────┘
                 │
                 ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                 Modular Comment Storage                        │
+│              Modular Storage Architecture                      │
 │                                                                │
-│  ┌────────────────────┐    ┌──────────────────────┐          │
-│  │ LocalDiskExtractor │    │  TigrisExtractor     │          │
-│  │  (JSON files)      │    │  (S3-compatible)     │          │
-│  └────────────────────┘    └──────────────────────┘          │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │          Base Classes (base_json_extractor.py)           │ │
+│  │  • BaseLocalDiskExtractor - Common disk storage logic    │ │
+│  │  • BaseTigrisExtractor - Common S3/Tigris logic          │ │
+│  └──────────────────────────────────────────────────────────┘ │
 │                                                                │
-│  Storage backends are configurable via COMMENT_STORAGE_TYPE   │
-│  - local: Uses state/pending_comments.json                    │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │          Comment Storage (CommentExtractor)            │   │
+│  │  ┌──────────────────┐    ┌──────────────────────┐     │   │
+│  │  │ LocalDiskExtractor│    │  TigrisExtractor     │     │   │
+│  │  │  (JSON files)    │    │  (S3-compatible)     │     │   │
+│  │  └──────────────────┘    └──────────────────────┘     │   │
+│  │  Configured via COMMENT_STORAGE_TYPE                   │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │       Audit Log Storage (AuditLogExtractor)            │   │
+│  │  ┌──────────────────┐    ┌──────────────────────┐     │   │
+│  │  │LocalDiskAudit    │    │  TigrisAudit         │     │   │
+│  │  │Extractor         │    │  Extractor           │     │   │
+│  │  └──────────────────┘    └──────────────────────┘     │   │
+│  │  Configured via AUDIT_LOG_STORAGE_TYPE                 │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                │
+│  Both comment and audit log storage support:                  │
+│  - local: Uses state/*.json files                             │
 │  - tigris: Uses Tigris object storage on Fly.io               │
 │                                                                │
-│  Other state files (always local):                            │
-│  - audit_log.json (all generated responses + metadata)        │
+│  Other state files (local only):                              │
 │  - no_match_log.json (comments that didn't warrant response)  │
 │  - posted_ids.txt (simple list of already-responded IDs)      │
 └───────────────────────────────────────────────────────────────┘
@@ -143,21 +161,26 @@ These constraints are **non-negotiable** and define the architecture:
 │   └── general-fitness-guidelines.md
 ├── state/
 │   ├── pending_comments.json               # When using local storage
-│   ├── audit_log.json
-│   ├── no_match_log.json
-│   └── posted_ids.txt
+│   ├── audit_log.json                      # When using local storage
+│   ├── no_match_log.json                   # Always local
+│   └── posted_ids.txt                      # Always local
 ├── src/
-│   ├── comment_extractor.py         # Abstract extractor interface
-│   ├── comment_extractor_factory.py # Factory for creating extractors
-│   ├── local_disk_extractor.py      # Local disk implementation
-│   ├── tigris_extractor.py          # Tigris/S3 implementation
-│   ├── webhook_receiver.py          # Webhook endpoint
-│   ├── processor.py                 # Main processing loop
-│   ├── instagram_api.py             # Instagram Graph API wrapper
-│   ├── llm_client.py                # LLM API wrapper
-│   ├── validator.py                 # Response validation
-│   ├── token_manager.py             # OAuth token management
-│   └── config.py                    # Configuration
+│   ├── base_json_extractor.py        # Base classes for extractors
+│   ├── comment_extractor.py          # Abstract comment extractor interface
+│   ├── comment_extractor_factory.py  # Factory for creating comment extractors
+│   ├── local_disk_extractor.py       # Local disk comment implementation
+│   ├── tigris_extractor.py           # Tigris/S3 comment implementation
+│   ├── audit_log_extractor.py        # Abstract audit log extractor interface
+│   ├── audit_log_extractor_factory.py # Factory for creating audit log extractors
+│   ├── local_disk_audit_extractor.py # Local disk audit log implementation
+│   ├── tigris_audit_extractor.py     # Tigris/S3 audit log implementation
+│   ├── webhook_receiver.py           # Webhook endpoint
+│   ├── processor.py                  # Main processing loop
+│   ├── instagram_api.py              # Instagram Graph API wrapper
+│   ├── llm_client.py                 # LLM API wrapper
+│   ├── validator.py                  # Response validation
+│   ├── token_manager.py              # OAuth token management
+│   └── config.py                     # Configuration
 ├── templates/
 │   ├── debate_prompt.txt                   # For numbered articles
 │   ├── debate_prompt_unnumbered.txt        # For unnumbered articles
@@ -192,36 +215,65 @@ Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON
   - `true` - Article uses numbered sections (§X.Y.Z), responses include citations
   - `false` - Article without numbered sections, responses reference content naturally
 
-### 5.4 Comment Storage Configuration
+### 5.4 Storage Configuration
 
-The system supports modular comment storage backends to enable distributed deployment:
+The system supports modular storage backends for both comments and audit logs to enable distributed deployment:
+
+**Base Classes:**
+Both storage systems share common functionality through base classes (`base_json_extractor.py`):
+- `BaseLocalDiskExtractor` - Provides common local disk JSON storage operations (file paths, load/save)
+- `BaseTigrisExtractor` - Provides common S3/Tigris operations (credential handling, S3 client, read/write)
+
+These base classes eliminate code duplication and ensure consistent behavior across storage backends.
 
 **Environment Variables:**
+
+*Comment Storage:*
 - `COMMENT_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
-- `AWS_ACCESS_KEY_ID` - Tigris access key ID (for Tigris storage)
-- `AWS_SECRET_ACCESS_KEY` - Tigris secret access key (for Tigris storage)
+
+*Audit Log Storage:*
+- `AUDIT_LOG_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
+
+*Tigris/S3 Configuration (when using Tigris for either storage type):*
+- `AWS_ACCESS_KEY_ID` - Tigris access key ID
+- `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
 - `AWS_ENDPOINT_URL_S3` - S3 endpoint URL (default: https://fly.storage.tigris.dev)
-- `TIGRIS_BUCKET_NAME` - Tigris bucket name (for Tigris storage)
+- `TIGRIS_BUCKET_NAME` - Tigris bucket name
 - `AWS_REGION` - AWS region (default: auto)
 
 **Storage Backends:**
 
-1. **Local Disk Storage** (`COMMENT_STORAGE_TYPE=local`)
-   - Stores pending comments in `state/pending_comments.json`
+1. **Local Disk Storage** (`STORAGE_TYPE=local`)
+   - Comments: `state/pending_comments.json`
+   - Audit Logs: `state/audit_log.json`
    - Suitable for single-machine deployments
    - Default option, no additional configuration required
 
-2. **Tigris Object Storage** (`COMMENT_STORAGE_TYPE=tigris`)
-   - Stores pending comments in Tigris/S3-compatible object storage
+2. **Tigris Object Storage** (`STORAGE_TYPE=tigris`)
+   - Comments: `state/pending_comments.json` (in S3 bucket)
+   - Audit Logs: `state/audit_log.json` (in S3 bucket)
    - Suitable for distributed deployments on Fly.io
    - Allows webhook server, dashboard, and processor to run on different machines
    - Requires Tigris bucket creation: `fly storage create`
    - S3-compatible API using boto3 library
 
+**Storage Implementations:**
+
+*Comment Storage:*
+- `LocalDiskExtractor` (extends `BaseLocalDiskExtractor`) - Local JSON file storage
+- `TigrisExtractor` (extends `BaseTigrisExtractor`) - S3-compatible object storage
+- Factory: `create_comment_extractor()` - Creates appropriate extractor based on `COMMENT_STORAGE_TYPE`
+
+*Audit Log Storage:*
+- `LocalDiskAuditExtractor` (extends `BaseLocalDiskExtractor`) - Local JSON file storage
+- `TigrisAuditExtractor` (extends `BaseTigrisExtractor`) - S3-compatible object storage
+- Factory: `create_audit_log_extractor()` - Creates appropriate extractor based on `AUDIT_LOG_STORAGE_TYPE`
+
 **Use Case:**
 When running the bot on Fly.io with separate process groups (webhook, dashboard, scheduler), 
-the webhook server can save comments to Tigris storage, and the processor running in a 
-different machine can read them. This enables true horizontal scaling without shared filesystem.
+both the webhook server and processor can save/read comments and audit logs to/from Tigris storage, 
+enabling true horizontal scaling without shared filesystem. Each component can independently 
+configure its storage backends, allowing mixed configurations (e.g., local comments with Tigris audit logs).
 
 ---
 
@@ -298,7 +350,7 @@ different machine can read them. This enables true horizontal scaling without sh
    - If validation fails → Log error, mark comment as failed
 
    **3.6 Store Result:**
-   - Append to `audit_log.json` with full metadata:
+   - Save via AuditLogExtractor interface with full metadata:
      ```json
      {
        "comment_id": "...",
@@ -618,10 +670,15 @@ Stores comments awaiting processing.
   - `timestamp` (string, required): When comment was created (ISO 8601)
   - `received_at` (string, required): When webhook was received (ISO 8601)
 
-### 9.2 `audit_log.json`
+### 9.2 Audit Log Storage
 
-Stores all generated responses with metadata.
+Stores all generated responses with metadata. Can be stored locally or in Tigris object storage based on `AUDIT_LOG_STORAGE_TYPE` configuration.
 
+**Storage Backends:**
+- **Local**: `state/audit_log.json`
+- **Tigris**: `state/audit_log.json` (in S3 bucket)
+
+**Format:**
 ```json
 {
   "version": "1.0",
@@ -648,6 +705,11 @@ Stores all generated responses with metadata.
   ]
 }
 ```
+
+**Access:**
+- Saved via `AuditLogExtractor.save_entry(entry)`
+- Loaded via `AuditLogExtractor.load_entries()`
+- Updated via `AuditLogExtractor.update_entry(entry_id, updates)`
 
 **Schema:**
 - `version` (string): Schema version

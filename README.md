@@ -19,6 +19,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 ├── articles/           # Source articles with numbered sections (§X.Y.Z)
 ├── articles_unnumbered/ # Source articles without numbered sections
 ├── src/               # Core application code
+│   ├── base_json_extractor.py       # Base classes for JSON storage extractors
 │   ├── audit_log_extractor.py       # Abstract audit log extractor interface
 │   ├── audit_log_extractor_factory.py # Factory for creating audit log extractors
 │   ├── local_disk_audit_extractor.py # Local disk audit log storage (implements audit_log_extractor)
@@ -158,14 +159,32 @@ pytest --cov=src tests/
    - Verifies webhook signatures
    - Saves comments to pending queue via comment extractor
 
-2. **Comment Extractor** (modular interface)
+2. **Storage Extractors** (modular interfaces with base classes)
+   
+   **Base Classes** (`base_json_extractor.py`)
+   - `BaseLocalDiskExtractor` - Common functionality for local disk JSON storage
+   - `BaseTigrisExtractor` - Common functionality for S3/Tigris object storage
+   
+   These base classes eliminate code duplication between comment and audit log extractors by providing:
+   - Shared state directory management
+   - Common JSON file load/save operations
+   - Unified S3 client initialization and credential handling
+   - Reusable S3 read/write helper methods
+   
+   **Comment Extractor** (modular interface)
    - **Abstract Interface** (`comment_extractor.py`) - Defines the contract for storage backends
-   - **Local Disk Extractor** (`local_disk_extractor.py`) - Stores comments in local JSON files
-   - **Tigris Extractor** (`tigris_extractor.py`) - Stores comments in Tigris object storage (S3-compatible)
-   - **Factory** (`comment_extractor_factory.py`) - Creates appropriate extractor based on configuration
+   - **Local Disk Extractor** (`local_disk_extractor.py`) - Stores comments in local JSON files (extends `BaseLocalDiskExtractor`)
+   - **Tigris Extractor** (`tigris_extractor.py`) - Stores comments in Tigris object storage (extends `BaseTigrisExtractor`)
+   - **Factory** (`comment_extractor_factory.py`) - Creates appropriate extractor based on `COMMENT_STORAGE_TYPE`
+   
+   **Audit Log Extractor** (modular interface)
+   - **Abstract Interface** (`audit_log_extractor.py`) - Defines the contract for audit log storage
+   - **Local Disk Audit Extractor** (`local_disk_audit_extractor.py`) - Stores audit logs in local JSON files (extends `BaseLocalDiskExtractor`)
+   - **Tigris Audit Extractor** (`tigris_audit_extractor.py`) - Stores audit logs in Tigris object storage (extends `BaseTigrisExtractor`)
+   - **Factory** (`audit_log_extractor_factory.py`) - Creates appropriate extractor based on `AUDIT_LOG_STORAGE_TYPE`
    
    This modular design allows the webhook server, dashboard, and comment processor to run on 
-   different machines while sharing a common storage backend.
+   different machines while sharing common storage backends for both comments and audit logs.
 
 3. **Comment Processor** (`processor.py`)
    - Loads pending comments via comment extractor
@@ -174,6 +193,7 @@ pytest --cov=src tests/
    - Generates responses with citations
    - Validates responses
    - Posts approved responses
+   - Saves audit log entries via audit log extractor
 
 4. **Instagram API** (`instagram_api.py`)
    - Fetches comment data
@@ -191,17 +211,18 @@ pytest --cov=src tests/
    - Checks response length
    - Detects hallucinations
 
-6. **Token Manager** (`token_manager.py`)
+7. **Token Manager** (`token_manager.py`)
    - Manages OAuth access tokens
    - Stores long-lived tokens (60-day validity)
    - Automatically refreshes tokens before expiration
    - Handles token expiration checks
 
-7. **Dashboard** (`dashboard.py`)
+8. **Dashboard** (`dashboard.py`)
    - Web interface for reviewing responses
    - OAuth login/logout functionality
    - Displays authentication status
    - Shows token expiration information
+   - Uses audit log extractor for reading/updating responses
 
 ## Design Principles
 
