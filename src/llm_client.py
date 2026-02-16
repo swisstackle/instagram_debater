@@ -39,7 +39,7 @@ class LLMClient:
         Returns:
             Generated response text
         """
-        response = self.client.chat.completions.create(
+        response = self.client.chat.send(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": "You are a debate assistant bot."},

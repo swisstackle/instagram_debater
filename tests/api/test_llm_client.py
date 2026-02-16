@@ -40,7 +40,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "Generated response text"
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         # Create new client with mocked OpenRouter
@@ -100,7 +100,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "YES - The post is about the same topic."
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         client = LLMClient(api_key="test", model_name="test")
@@ -120,7 +120,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "NO - The post is about a different topic."
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         client = LLMClient(api_key="test", model_name="test")
@@ -140,7 +140,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "YES - The comment presents a debatable claim."
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         client = LLMClient(api_key="test", model_name="test")
@@ -160,7 +160,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "NO - Just a generic compliment."
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         client = LLMClient(api_key="test", model_name="test")
@@ -180,7 +180,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "YES - The content is relevant to this article."
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         client = LLMClient(api_key="test", model_name="test")
@@ -202,7 +202,7 @@ class TestLLMClient:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "NO - The content is not relevant."
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.send.return_value = mock_response
         mock_openrouter.return_value = mock_client
 
         client = LLMClient(api_key="test", model_name="test")
