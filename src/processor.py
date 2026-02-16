@@ -414,7 +414,7 @@ class CommentProcessor:
         dashboard to be posted by the processor.
         """
         entries = self.audit_log_extractor.load_entries()
-
+        print(f"Found {len(entries)} approved responses to post")
         for entry in entries:
             if entry.get("status") == "approved" and not entry.get("posted", False):
                 try:
@@ -423,6 +423,7 @@ class CommentProcessor:
                         entry["comment_id"],
                         entry["generated_response"]
                     )
+                    print("Posted response")
 
                     # Update entry
                     updates = {
