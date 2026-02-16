@@ -496,7 +496,7 @@ class CommentProcessor:
                             print("  - Skipped (not relevant)")
 
             # Clear pending comments after processing
-            # Only clear if we had comments to process, as there's nothing to clear otherwise
+            # This is inside the 'else' block, so we only clear when comments existed
             self.clear_pending_comments()
 
         # Post approved responses (both auto-approved and manually approved)
