@@ -6,10 +6,11 @@ An automated Instagram comment responder that engages with commenters using evid
 
 The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 - Monitors comments on designated Instagram posts
+- MAINTAINS TRANSPARENCY BY IDENTIFYING ITSELF AS A BOT
 - Identifies debatable claims using AI
 - Selects the most relevant article from multiple sources
 - Responds with relevant citations and arguments from the selected article
-- Maintains transparency by identifying itself as a bot
+
 - Operates without persistent databases or vector stores
 
 ## Project Structure
