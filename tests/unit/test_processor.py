@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 import tempfile
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, MagicMock, patch, mock_open
 
 import pytest
 
@@ -1080,6 +1080,94 @@ More text here.
 
                                 captured = capsys.readouterr()
                                 assert "Processing 1 pending comment(s)" in captured.out
+
+    def test_ensure_valid_token_oauth_token_fresh(self, processor, capsys):
+        """Test _ensure_valid_token when OAuth token is fresh."""
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = {
+                "access_token": "fresh_oauth_token",
+                "expires_at": "2026-03-30T00:00:00Z"
+            }
+            mock_manager.is_token_expired.return_value = False
+            mock_tm.return_value = mock_manager
+            
+            processor._ensure_valid_token()
+            
+            captured = capsys.readouterr()
+            assert "OAuth token is valid" in captured.out
+            mock_manager.is_token_expired.assert_called_once_with(buffer_days=5)
+
+    def test_ensure_valid_token_oauth_token_refreshed(self, processor, mock_config, capsys):
+        """Test _ensure_valid_token refreshes expiring OAuth token."""
+        mock_config.instagram_app_secret = "test_secret"
+        
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = {
+                "access_token": "expiring_oauth_token",
+                "expires_at": "2026-02-20T00:00:00Z"
+            }
+            mock_manager.is_token_expired.return_value = True
+            mock_manager.refresh_token.return_value = True
+            mock_tm.return_value = mock_manager
+            
+            processor._ensure_valid_token()
+            
+            captured = capsys.readouterr()
+            assert "Token expiring soon" in captured.out
+            assert "Token refreshed successfully" in captured.out
+            mock_manager.refresh_token.assert_called_once_with("test_secret")
+
+    def test_ensure_valid_token_refresh_fails(self, processor, mock_config, capsys):
+        """Test _ensure_valid_token when token refresh fails."""
+        mock_config.instagram_app_secret = "test_secret"
+        
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = {
+                "access_token": "expiring_oauth_token",
+                "expires_at": "2026-02-20T00:00:00Z"
+            }
+            mock_manager.is_token_expired.return_value = True
+            mock_manager.refresh_token.return_value = False
+            mock_tm.return_value = mock_manager
+            
+            processor._ensure_valid_token()
+            
+            captured = capsys.readouterr()
+            assert "Token refresh failed" in captured.out
+
+    def test_ensure_valid_token_no_oauth(self, processor, capsys):
+        """Test _ensure_valid_token when no OAuth token exists."""
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = None
+            mock_tm.return_value = mock_manager
+            
+            processor._ensure_valid_token()
+            
+            captured = capsys.readouterr()
+            assert "No OAuth token found" in captured.out
+
+    def test_ensure_valid_token_handles_exception(self, processor, capsys):
+        """Test _ensure_valid_token handles exceptions gracefully."""
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_tm.side_effect = Exception("TokenManager error")
+            
+            processor._ensure_valid_token()
+            
+            captured = capsys.readouterr()
+            assert "Token validation warning" in captured.out
+
+    def test_post_approved_responses_calls_token_validation(self, processor, mock_config, mock_instagram_api):
+        """Test that post_approved_responses calls token validation."""
+        with patch.object(processor, '_ensure_valid_token') as mock_token_check:
+            with patch.object(processor.audit_log_extractor, 'load_entries', return_value=[]):
+                processor.post_approved_responses()
+                
+                # Should call token validation before posting
+                mock_token_check.assert_called_once()
 
 
 class TestCommentProcessorUnnumbered:

@@ -3,9 +3,13 @@ Configuration management for the Instagram Debate Bot.
 Loads environment variables and provides access to configuration settings.
 """
 import json
+import logging
 import os
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -36,7 +40,43 @@ class Config:
 
     @property
     def instagram_access_token(self) -> str:
-        """Get Instagram access token."""
+        """Get Instagram access token.
+        
+        Prioritizes OAuth token from token_manager with automatic refresh.
+        Falls back to environment variable if OAuth token is unavailable.
+        This ensures the bot uses fresh, long-lived tokens instead of stale env var tokens.
+        """
+        try:
+            # Try OAuth token first
+            from src.token_manager import TokenManager  # pylint: disable=import-outside-toplevel
+            
+            manager = TokenManager(state_dir="state")
+            token_data = manager.get_token()
+            
+            if token_data:
+                # Check if token is expired and needs refresh
+                if manager.is_token_expired(buffer_days=5):
+                    # Attempt to refresh the token
+                    app_secret = self.instagram_app_secret
+                    if app_secret:
+                        success = manager.refresh_token(app_secret)
+                        if success:
+                            # Reload token data after refresh
+                            token_data = manager.get_token()
+                            if token_data:
+                                logger.info("Using refreshed OAuth token from token_manager")
+                                return token_data.get("access_token", "")
+                    logger.warning("Failed to refresh OAuth token, falling back to environment variable")
+                else:
+                    # Token is still valid, use it
+                    logger.info("Using valid OAuth token from token_manager")
+                    return token_data.get("access_token", "")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # If anything goes wrong with OAuth, fall through to env var
+            logger.debug("OAuth token manager error: %s", exc)
+        
+        # Fall back to environment variable if OAuth unavailable or failed
+        logger.info("Using environment variable token (OAuth unavailable or failed)")
         return os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 
     @property

@@ -4,9 +4,14 @@ Handles webhook verification, comment fetching, and reply posting.
 """
 import hashlib
 import hmac
+import json
+import logging
 from typing import Any, Dict, List
 
 import requests
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class InstagramAPI:
@@ -129,6 +134,9 @@ class InstagramAPI:
 
         Returns:
             Response data with new comment ID
+            
+        Raises:
+            requests.exceptions.HTTPError: If the Graph API returns an error
         """
         url = f"{self.BASE_URL}/{comment_id}/replies"
         params = {
@@ -136,6 +144,44 @@ class InstagramAPI:
             "message": message
         }
 
-        response = requests.post(url, params=params, timeout=30)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.post(url, params=params, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            # Log detailed error information for debugging
+            try:
+                error_data = e.response.json()
+                error_code = error_data.get("error", {}).get("code")
+                error_msg = error_data.get("error", {}).get("message", str(e))
+                
+                if error_code == 190:
+                    # OAuthException - token is invalid
+                    logger.error(
+                        "OAuth token invalid (code 190): %s. "
+                        "Token may be expired, revoked, or lack required scopes.",
+                        error_msg
+                    )
+                elif error_code in [104, 100]:
+                    # Token/permission issues
+                    logger.error(
+                        "Graph API permission/token error (code %s): %s",
+                        error_code, error_msg
+                    )
+                else:
+                    logger.error(
+                        "Graph API error code %s: %s",
+                        error_code, error_msg
+                    )
+                    
+                # Log full error body for diagnosis
+                logger.debug("Full Graph API error response: %s", json.dumps(error_data, indent=2))
+            except (ValueError, KeyError):
+                # Could not parse JSON error response
+                logger.error(
+                    "Graph API HTTP %s error: %s (could not parse error body)",
+                    e.response.status_code, e
+                )
+            
+            # Re-raise so caller can handle
+            raise

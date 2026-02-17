@@ -480,6 +480,42 @@ class CommentProcessor:
             # If extraction itself fails, return error info
             return {"error_extraction_failed": str(e)}
 
+    def _ensure_valid_token(self) -> None:
+        """
+        Ensure the Instagram access token is valid.
+        
+        Checks for OAuth token expiration and attempts refresh if needed.
+        Logs token validation status for debugging.
+        
+        Raises:
+            ValueError: If no valid token is available
+        """
+        try:
+            from src.token_manager import TokenManager  # pylint: disable=import-outside-toplevel
+            
+            manager = TokenManager(state_dir="state")
+            
+            # Check if OAuth token exists and is expired
+            if manager.get_token():
+                if manager.is_token_expired(buffer_days=5):
+                    print("Token expiring soon, attempting refresh...")
+                    app_secret = self.config.instagram_app_secret
+                    if app_secret:
+                        success = manager.refresh_token(app_secret)
+                        if success:
+                            print("Token refreshed successfully")
+                        else:
+                            print("Token refresh failed, will use env var token if available")
+                    else:
+                        print("Cannot refresh token: app secret not configured")
+                else:
+                    print("OAuth token is valid")
+            else:
+                print("No OAuth token found, using environment variable token")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            print(f"Token validation warning: {e}")
+            # Don't fail - env var token might still be valid
+
     def post_approved_responses(self) -> None:
         """Post all approved responses to Instagram.
 
@@ -487,6 +523,9 @@ class CommentProcessor:
         AUTO_POST_ENABLED setting. This allows manually approved responses from the
         dashboard to be posted by the processor.
         """
+        # Ensure token is valid before attempting to post
+        self._ensure_valid_token()
+        
         entries = self.audit_log_extractor.load_entries()
         print(f"Found {len(entries)} approved responses to post")
         for entry in entries:

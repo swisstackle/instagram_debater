@@ -2,7 +2,10 @@
 Unit tests for configuration management.
 """
 # pylint: disable=unused-import
+import json
 import os
+from datetime import datetime, timezone, timedelta
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -196,3 +199,127 @@ class TestConfig:
         monkeypatch.delenv("INSTAGRAM_REDIRECT_URI", raising=False)
         config = Config()
         assert config.instagram_redirect_uri == "http://127.0.0.1:5000/auth/instagram/callback"
+
+    # OAuth Token Refresh Integration Tests
+    def test_instagram_access_token_prefers_oauth_valid(self, monkeypatch, tmp_path):
+        """Test that config prefers valid OAuth token from token_manager."""
+        # Setup: Create a token file with a valid (non-expired) token
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+        
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat().replace("+00:00", "Z")
+        token_data = {
+            "access_token": "oauth_token_valid",
+            "token_type": "bearer",
+            "expires_at": expires_at,
+            "user_id": "123456"
+        }
+        
+        token_file = state_dir / "instagram_token.json"
+        with open(token_file, 'w', encoding='utf-8') as f:
+            json.dump(token_data, f)
+        
+        # Setup env var (should be ignored in favor of OAuth)
+        monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "env_var_token")
+        monkeypatch.setenv("INSTAGRAM_APP_SECRET", "app_secret")
+        
+        # Patch TokenManager where it's imported
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = token_data
+            mock_manager.is_token_expired.return_value = False
+            mock_tm.return_value = mock_manager
+            
+            config = Config()
+            token = config.instagram_access_token
+            
+            # Should use OAuth token, not env var
+            assert token == "oauth_token_valid"
+            mock_manager.get_token.assert_called()
+            mock_manager.is_token_expired.assert_called_with(buffer_days=5)
+
+    def test_instagram_access_token_refreshes_expired_oauth(self, monkeypatch):
+        """Test that config refreshes OAuth token when expired."""
+        # Setup: Token manager indicates token is expired
+        token_data = {
+            "access_token": "old_oauth_token",
+            "token_type": "bearer",
+            "user_id": "123456"
+        }
+        
+        refreshed_token_data = {
+            "access_token": "refreshed_oauth_token",
+            "token_type": "bearer",
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat().replace("+00:00", "Z")
+        }
+        
+        monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "env_var_token")
+        monkeypatch.setenv("INSTAGRAM_APP_SECRET", "test_secret")
+        
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.side_effect = [token_data, refreshed_token_data]
+            mock_manager.is_token_expired.return_value = True
+            mock_manager.refresh_token.return_value = True
+            mock_tm.return_value = mock_manager
+            
+            config = Config()
+            token = config.instagram_access_token
+            
+            # Should refresh token and return new one
+            assert token == "refreshed_oauth_token"
+            mock_manager.refresh_token.assert_called_with("test_secret")
+
+    def test_instagram_access_token_refresh_fails_falls_back_to_env(self, monkeypatch):
+        """Test that config falls back to env var if OAuth refresh fails."""
+        token_data = {
+            "access_token": "expired_oauth_token",
+            "token_type": "bearer",
+            "user_id": "123456"
+        }
+        
+        monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "env_var_token")
+        monkeypatch.setenv("INSTAGRAM_APP_SECRET", "test_secret")
+        
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = token_data
+            mock_manager.is_token_expired.return_value = True
+            mock_manager.refresh_token.return_value = False  # Refresh fails
+            mock_tm.return_value = mock_manager
+            
+            config = Config()
+            token = config.instagram_access_token
+            
+            # Should fall back to env var when refresh fails
+            assert token == "env_var_token"
+            mock_manager.refresh_token.assert_called()
+
+    def test_instagram_access_token_no_oauth_uses_env_var(self, monkeypatch):
+        """Test that config uses env var when no OAuth token exists."""
+        monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "env_var_token")
+        monkeypatch.delenv("INSTAGRAM_APP_SECRET", raising=False)
+        
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_manager = MagicMock()
+            mock_manager.get_token.return_value = None  # No OAuth token
+            mock_tm.return_value = mock_manager
+            
+            config = Config()
+            token = config.instagram_access_token
+            
+            # Should use env var when OAuth unavailable
+            assert token == "env_var_token"
+
+    def test_instagram_access_token_handles_exception(self, monkeypatch):
+        """Test that config handles TokenManager exceptions gracefully."""
+        monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "env_var_token")
+        
+        with patch('src.token_manager.TokenManager') as mock_tm:
+            mock_tm.side_effect = Exception("TokenManager import failed")
+            
+            config = Config()
+            token = config.instagram_access_token
+            
+            # Should fall back to env var on exception
+            assert token == "env_var_token"
