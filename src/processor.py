@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from src.comment_extractor import CommentExtractor
 from src.audit_log_extractor import AuditLogExtractor
+from src.posted_comments_extractor import PostedCommentsExtractor
 from src.file_utils import load_json_file, save_json_file
 from src.validator import ResponseValidator
 
@@ -16,7 +17,7 @@ from src.validator import ResponseValidator
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
 
-    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None):
+    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None, posted_comments_extractor: PostedCommentsExtractor = None):
         """
         Initialize comment processor.
 
@@ -27,6 +28,7 @@ class CommentProcessor:
             config: Config instance
             comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
             audit_log_extractor: AuditLogExtractor instance (optional, defaults to factory-created)
+            posted_comments_extractor: PostedCommentsExtractor instance (optional, defaults to factory-created)
         """
         self.instagram_api = instagram_api
         self.llm_client = llm_client
@@ -44,6 +46,12 @@ class CommentProcessor:
             from src.audit_log_extractor_factory import create_audit_log_extractor
             audit_log_extractor = create_audit_log_extractor()
         self.audit_log_extractor = audit_log_extractor
+        
+        # Use provided posted comments extractor or create one via factory
+        if posted_comments_extractor is None:
+            from src.posted_comments_extractor_factory import create_posted_comments_extractor
+            posted_comments_extractor = create_posted_comments_extractor()
+        self.posted_comments_extractor = posted_comments_extractor
 
     def load_article(self, article_path: str) -> str:
         """
@@ -508,11 +516,8 @@ class CommentProcessor:
                     }
                     self.audit_log_extractor.update_entry(entry["id"], updates)
 
-                    # Save posted ID
-                    posted_file = os.path.join("state", "posted_ids.txt")
-                    os.makedirs("state", exist_ok=True)
-                    with open(posted_file, 'a', encoding='utf-8') as f:
-                        f.write(entry["comment_id"] + "\n")
+                    # Save posted ID using extractor
+                    self.posted_comments_extractor.add_posted_id(entry["comment_id"])
 
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     # Extract Graph API error details

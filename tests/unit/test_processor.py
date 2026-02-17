@@ -1198,3 +1198,156 @@ Exercise helps with weight management and reduces disease risk.
         assert result["status"] in ["approved", "pending_review"]
         # Citations should be empty for unnumbered articles (no citations in generated response)
         assert result["citations_used"] == []
+
+
+class TestCommentProcessorPostedCommentsIntegration:
+    """Test suite for CommentProcessor integration with PostedCommentsExtractor."""
+
+    @pytest.fixture
+    def mock_instagram_api(self):
+        """Create a mock Instagram API."""
+        mock_api = Mock()
+        mock_api.post_reply.return_value = {"id": "reply_123"}
+        return mock_api
+
+    @pytest.fixture
+    def mock_llm_client(self):
+        """Create a mock LLM client."""
+        return Mock()
+
+    @pytest.fixture
+    def mock_validator(self):
+        """Create a mock validator."""
+        return Mock()
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock config."""
+        mock_cfg = Mock()
+        mock_cfg.auto_post_enabled = False
+        return mock_cfg
+
+    @pytest.fixture
+    def mock_posted_extractor(self):
+        """Create a mock PostedCommentsExtractor."""
+        mock_extractor = Mock()
+        mock_extractor.add_posted_id = Mock()
+        mock_extractor.is_posted = Mock(return_value=False)
+        return mock_extractor
+
+    @pytest.fixture
+    def processor_with_posted_extractor(
+        self, mock_instagram_api, mock_llm_client, mock_validator,
+        mock_config, mock_posted_extractor
+    ):
+        """Create a CommentProcessor with mocked PostedCommentsExtractor."""
+        processor = CommentProcessor(
+            mock_instagram_api,
+            mock_llm_client,
+            mock_validator,
+            mock_config,
+            posted_comments_extractor=mock_posted_extractor
+        )
+        return processor
+
+    def test_processor_accepts_posted_comments_extractor(self, processor_with_posted_extractor, mock_posted_extractor):
+        """Test that processor accepts and stores posted_comments_extractor."""
+        assert processor_with_posted_extractor.posted_comments_extractor == mock_posted_extractor
+
+    def test_processor_creates_posted_extractor_if_none_provided(
+        self, mock_instagram_api, mock_llm_client, mock_validator, mock_config
+    ):
+        """Test that processor creates PostedCommentsExtractor if none provided."""
+        with patch('src.posted_comments_extractor_factory.create_posted_comments_extractor') as mock_factory:
+            mock_extractor = Mock()
+            mock_factory.return_value = mock_extractor
+
+            processor = CommentProcessor(
+                mock_instagram_api,
+                mock_llm_client,
+                mock_validator,
+                mock_config
+            )
+
+            mock_factory.assert_called_once()
+            assert processor.posted_comments_extractor == mock_extractor
+
+    def test_post_approved_responses_adds_to_posted_extractor(
+        self, processor_with_posted_extractor, mock_instagram_api, mock_posted_extractor
+    ):
+        """Test that post_approved_responses adds comment ID to posted extractor."""
+        # Mock the audit log extractor
+        mock_entry = {
+            "id": "log_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": False
+        }
+
+        processor_with_posted_extractor.audit_log_extractor.load_entries = Mock(return_value=[mock_entry])
+        processor_with_posted_extractor.audit_log_extractor.update_entry = Mock()
+
+        # Post approved responses
+        processor_with_posted_extractor.post_approved_responses()
+
+        # Verify posted extractor was called
+        mock_posted_extractor.add_posted_id.assert_called_once_with("comment_123")
+
+    def test_post_approved_responses_adds_multiple_to_posted_extractor(
+        self, processor_with_posted_extractor, mock_instagram_api, mock_posted_extractor
+    ):
+        """Test that posting multiple approved responses adds all to posted extractor."""
+        # Mock the audit log extractor with multiple entries
+        mock_entries = [
+            {
+                "id": "log_001",
+                "comment_id": "comment_123",
+                "generated_response": "Test response 1",
+                "status": "approved",
+                "posted": False
+            },
+            {
+                "id": "log_002",
+                "comment_id": "comment_456",
+                "generated_response": "Test response 2",
+                "status": "approved",
+                "posted": False
+            }
+        ]
+
+        processor_with_posted_extractor.audit_log_extractor.load_entries = Mock(return_value=mock_entries)
+        processor_with_posted_extractor.audit_log_extractor.update_entry = Mock()
+
+        # Post approved responses
+        processor_with_posted_extractor.post_approved_responses()
+
+        # Verify posted extractor was called twice
+        assert mock_posted_extractor.add_posted_id.call_count == 2
+        mock_posted_extractor.add_posted_id.assert_any_call("comment_123")
+        mock_posted_extractor.add_posted_id.assert_any_call("comment_456")
+
+    def test_post_approved_responses_does_not_add_on_error(
+        self, processor_with_posted_extractor, mock_instagram_api, mock_posted_extractor
+    ):
+        """Test that posting errors don't add to posted extractor."""
+        # Mock the audit log extractor
+        mock_entry = {
+            "id": "log_001",
+            "comment_id": "comment_123",
+            "generated_response": "Test response",
+            "status": "approved",
+            "posted": False
+        }
+
+        processor_with_posted_extractor.audit_log_extractor.load_entries = Mock(return_value=[mock_entry])
+        processor_with_posted_extractor.audit_log_extractor.update_entry = Mock()
+
+        # Make post_reply raise an exception
+        mock_instagram_api.post_reply.side_effect = Exception("API error")
+
+        # Post approved responses
+        processor_with_posted_extractor.post_approved_responses()
+
+        # Verify posted extractor was NOT called
+        mock_posted_extractor.add_posted_id.assert_not_called()
