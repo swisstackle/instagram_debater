@@ -486,22 +486,20 @@ class CommentProcessor:
         
         Checks for OAuth token expiration and attempts refresh if needed.
         Logs token validation status for debugging.
-        
-        Raises:
-            ValueError: If no valid token is available
+        Uses configured token storage backend (local or Tigris).
         """
         try:
-            from src.token_manager import TokenManager  # pylint: disable=import-outside-toplevel
+            from src.token_extractor_factory import create_token_extractor  # pylint: disable=import-outside-toplevel
             
-            manager = TokenManager(state_dir="state")
+            extractor = create_token_extractor()
             
             # Check if OAuth token exists and is expired
-            if manager.get_token():
-                if manager.is_token_expired(buffer_days=5):
+            if extractor.get_token():
+                if extractor.is_token_expired(buffer_days=5):
                     print("Token expiring soon, attempting refresh...")
                     app_secret = self.config.instagram_app_secret
                     if app_secret:
-                        success = manager.refresh_token(app_secret)
+                        success = extractor.refresh_token(app_secret)
                         if success:
                             print("Token refreshed successfully")
                         else:

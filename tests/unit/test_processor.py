@@ -1083,55 +1083,55 @@ More text here.
 
     def test_ensure_valid_token_oauth_token_fresh(self, processor, capsys):
         """Test _ensure_valid_token when OAuth token is fresh."""
-        with patch('src.token_manager.TokenManager') as mock_tm:
-            mock_manager = MagicMock()
-            mock_manager.get_token.return_value = {
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = {
                 "access_token": "fresh_oauth_token",
                 "expires_at": "2026-03-30T00:00:00Z"
             }
-            mock_manager.is_token_expired.return_value = False
-            mock_tm.return_value = mock_manager
+            mock_extractor.is_token_expired.return_value = False
+            mock_factory.return_value = mock_extractor
             
             processor._ensure_valid_token()
             
             captured = capsys.readouterr()
             assert "OAuth token is valid" in captured.out
-            mock_manager.is_token_expired.assert_called_once_with(buffer_days=5)
+            mock_extractor.is_token_expired.assert_called_once_with(buffer_days=5)
 
     def test_ensure_valid_token_oauth_token_refreshed(self, processor, mock_config, capsys):
         """Test _ensure_valid_token refreshes expiring OAuth token."""
         mock_config.instagram_app_secret = "test_secret"
         
-        with patch('src.token_manager.TokenManager') as mock_tm:
-            mock_manager = MagicMock()
-            mock_manager.get_token.return_value = {
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = {
                 "access_token": "expiring_oauth_token",
                 "expires_at": "2026-02-20T00:00:00Z"
             }
-            mock_manager.is_token_expired.return_value = True
-            mock_manager.refresh_token.return_value = True
-            mock_tm.return_value = mock_manager
+            mock_extractor.is_token_expired.return_value = True
+            mock_extractor.refresh_token.return_value = True
+            mock_factory.return_value = mock_extractor
             
             processor._ensure_valid_token()
             
             captured = capsys.readouterr()
             assert "Token expiring soon" in captured.out
             assert "Token refreshed successfully" in captured.out
-            mock_manager.refresh_token.assert_called_once_with("test_secret")
+            mock_extractor.refresh_token.assert_called_once_with("test_secret")
 
     def test_ensure_valid_token_refresh_fails(self, processor, mock_config, capsys):
         """Test _ensure_valid_token when token refresh fails."""
         mock_config.instagram_app_secret = "test_secret"
         
-        with patch('src.token_manager.TokenManager') as mock_tm:
-            mock_manager = MagicMock()
-            mock_manager.get_token.return_value = {
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = {
                 "access_token": "expiring_oauth_token",
                 "expires_at": "2026-02-20T00:00:00Z"
             }
-            mock_manager.is_token_expired.return_value = True
-            mock_manager.refresh_token.return_value = False
-            mock_tm.return_value = mock_manager
+            mock_extractor.is_token_expired.return_value = True
+            mock_extractor.refresh_token.return_value = False
+            mock_factory.return_value = mock_extractor
             
             processor._ensure_valid_token()
             
@@ -1140,10 +1140,10 @@ More text here.
 
     def test_ensure_valid_token_no_oauth(self, processor, capsys):
         """Test _ensure_valid_token when no OAuth token exists."""
-        with patch('src.token_manager.TokenManager') as mock_tm:
-            mock_manager = MagicMock()
-            mock_manager.get_token.return_value = None
-            mock_tm.return_value = mock_manager
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = None
+            mock_factory.return_value = mock_extractor
             
             processor._ensure_valid_token()
             
@@ -1152,8 +1152,8 @@ More text here.
 
     def test_ensure_valid_token_handles_exception(self, processor, capsys):
         """Test _ensure_valid_token handles exceptions gracefully."""
-        with patch('src.token_manager.TokenManager') as mock_tm:
-            mock_tm.side_effect = Exception("TokenManager error")
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_factory.side_effect = Exception("Token extractor error")
             
             processor._ensure_valid_token()
             

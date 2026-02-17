@@ -174,12 +174,15 @@ These constraints are **non-negotiable** and define the architecture:
 │   ├── audit_log_extractor_factory.py # Factory for creating audit log extractors
 │   ├── local_disk_audit_extractor.py # Local disk audit log implementation
 │   ├── tigris_audit_extractor.py     # Tigris/S3 audit log implementation
+│   ├── token_extractor.py            # Abstract token extractor interface
+│   ├── token_extractor_factory.py    # Factory for creating token extractors
+│   ├── local_disk_token_extractor.py # Local disk OAuth token implementation
+│   ├── tigris_token_extractor.py     # Tigris/S3 OAuth token implementation
 │   ├── webhook_receiver.py           # Webhook endpoint
 │   ├── processor.py                  # Main processing loop
 │   ├── instagram_api.py              # Instagram Graph API wrapper
 │   ├── llm_client.py                 # LLM API wrapper
 │   ├── validator.py                  # Response validation
-│   ├── token_manager.py              # OAuth token management
 │   └── config.py                     # Configuration
 ├── templates/
 │   ├── debate_prompt.txt                   # For numbered articles

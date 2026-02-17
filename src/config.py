@@ -42,38 +42,39 @@ class Config:
     def instagram_access_token(self) -> str:
         """Get Instagram access token.
         
-        Prioritizes OAuth token from token_manager with automatic refresh.
+        Prioritizes OAuth token from token extractor with automatic refresh.
         Falls back to environment variable if OAuth token is unavailable.
         This ensures the bot uses fresh, long-lived tokens instead of stale env var tokens.
+        Supports both local and distributed (Tigris) token storage backends.
         """
         try:
-            # Try OAuth token first
-            from src.token_manager import TokenManager  # pylint: disable=import-outside-toplevel
+            # Try OAuth token first using configured storage backend
+            from src.token_extractor_factory import create_token_extractor  # pylint: disable=import-outside-toplevel
             
-            manager = TokenManager(state_dir="state")
-            token_data = manager.get_token()
+            extractor = create_token_extractor()
+            token_data = extractor.get_token()
             
             if token_data:
                 # Check if token is expired and needs refresh
-                if manager.is_token_expired(buffer_days=5):
+                if extractor.is_token_expired(buffer_days=5):
                     # Attempt to refresh the token
                     app_secret = self.instagram_app_secret
                     if app_secret:
-                        success = manager.refresh_token(app_secret)
+                        success = extractor.refresh_token(app_secret)
                         if success:
                             # Reload token data after refresh
-                            token_data = manager.get_token()
+                            token_data = extractor.get_token()
                             if token_data:
-                                logger.info("Using refreshed OAuth token from token_manager")
+                                logger.info("Using refreshed OAuth token from token storage")
                                 return token_data.get("access_token", "")
                     logger.warning("Failed to refresh OAuth token, falling back to environment variable")
                 else:
                     # Token is still valid, use it
-                    logger.info("Using valid OAuth token from token_manager")
+                    logger.info("Using valid OAuth token from token storage")
                     return token_data.get("access_token", "")
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # If anything goes wrong with OAuth, fall through to env var
-            logger.debug("OAuth token manager error: %s", exc)
+            logger.debug("OAuth token storage error: %s", exc)
         
         # Fall back to environment variable if OAuth unavailable or failed
         logger.info("Using environment variable token (OAuth unavailable or failed)")
