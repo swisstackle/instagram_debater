@@ -70,14 +70,14 @@ class Config:
                     logger.warning("Failed to refresh OAuth token, falling back to environment variable")
                 else:
                     # Token is still valid, use it
-                    logger.info("Using valid OAuth token from token storage")
+                    logger.info("config py: Using valid OAuth token from token storage")
                     return token_data.get("access_token", "")
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # If anything goes wrong with OAuth, fall through to env var
             logger.debug("OAuth token storage error: %s", exc)
         
         # Fall back to environment variable if OAuth unavailable or failed
-        logger.info("Using environment variable token (OAuth unavailable or failed)")
+        logger.info("config py: Using environment variable token (OAuth unavailable or failed)")
         return os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 
     @property
