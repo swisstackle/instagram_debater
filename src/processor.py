@@ -559,6 +559,7 @@ class CommentProcessor:
                     post_error_payload = {"message": str(e)}
                     if graph_body is not None:
                         post_error_payload["graph_api_error"] = graph_body
+                        printf("Graph API error details: %s", graph_body)
                     
                     # Log the error details
                     try:
