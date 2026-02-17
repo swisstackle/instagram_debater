@@ -70,7 +70,7 @@ class Config:
                     logger.warning("Failed to refresh OAuth token, falling back to environment variable")
                 else:
                     # Token is still valid, use it
-                    logger.info("Using valid OAuth token from token storage")
+                    logger.info("config py: Using valid OAuth token from token storage")
                     return token_data.get("access_token", "")
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # If anything goes wrong with OAuth, fall through to env var
