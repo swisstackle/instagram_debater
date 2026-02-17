@@ -34,14 +34,15 @@ class TestOAuthHelpers:
         assert config.instagram_client_secret == "test_secret"
         assert config.instagram_redirect_uri == "http://localhost:5000/callback"
 
-    def test_token_manager_integration(self, temp_state_dir):
-        """Test that TokenManager can be used for OAuth token storage."""
-        from src.token_manager import TokenManager
+    def test_token_extractor_integration(self, temp_state_dir, monkeypatch):
+        """Test that token extractor factory can store and retrieve OAuth tokens."""
+        from src.local_disk_token_extractor import LocalDiskTokenExtractor
         
-        manager = TokenManager(state_dir=temp_state_dir)
+        # Use local disk extractor directly with temp directory
+        extractor = LocalDiskTokenExtractor(state_dir=temp_state_dir)
         
         # Save a token as would be done after OAuth
-        manager.save_token(
+        extractor.save_token(
             access_token="long_lived_token_abc",
             token_type="bearer",
             expires_in=5184000,
@@ -50,7 +51,7 @@ class TestOAuthHelpers:
         )
         
         # Retrieve and verify
-        token_data = manager.get_token()
+        token_data = extractor.get_token()
         assert token_data is not None
         assert token_data["access_token"] == "long_lived_token_abc"
         assert token_data["user_id"] == "12345"

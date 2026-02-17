@@ -25,15 +25,18 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 │   ├── local_disk_audit_extractor.py # Local disk audit log storage (implements audit_log_extractor)
 │   ├── tigris_audit_extractor.py    # Tigris/S3 audit log storage (implements audit_log_extractor)
 │   ├── comment_extractor.py         # Abstract comment extractor interface
-│   ├── comment_extractor_factory.py # Factory for creating extractors
+│   ├── comment_extractor_factory.py # Factory for creating comment extractors
 │   ├── local_disk_extractor.py      # Local disk storage implementation (implements comment_extractor)
 │   ├── tigris_extractor.py          # Tigris/S3 storage implementation (implements comment_extractor)
+│   ├── token_extractor.py           # Abstract token extractor interface
+│   ├── token_extractor_factory.py   # Factory for creating token extractors
+│   ├── local_disk_token_extractor.py # Local disk OAuth token storage (implements token_extractor)
+│   ├── tigris_token_extractor.py    # Tigris/S3 OAuth token storage (implements token_extractor)
 │   ├── config.py                    # Configuration management
 │   ├── file_utils.py                # File utility functions
 │   ├── instagram_api.py             # Instagram Graph API wrapper
 │   ├── llm_client.py                # OpenRouter LLM client
 │   ├── processor.py                 # Main processing loop
-│   ├── token_manager.py             # OAuth token management
 │   ├── validator.py                 # Response validation
 │   └── webhook_receiver.py          # Webhook handling
 ├── templates/         # Prompt templates for LLM
@@ -97,6 +100,11 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `AUDIT_LOG_STORAGE_TYPE` - Storage backend for audit logs (`local` or `tigris`, default: `local`)
      - `local` - Uses local disk storage (`state/audit_log.json`)
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible)
+   
+   **OAuth token storage:**
+   - `OAUTH_TOKEN_STORAGE_TYPE` - Storage backend for OAuth tokens (`local` or `tigris`, default: `local`)
+     - `local` - Uses local disk storage (`state/instagram_token.json`)
+     - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible, recommended for distributed deployments)
    
    **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris` or `AUDIT_LOG_STORAGE_TYPE=tigris`):**
    - `AWS_ACCESS_KEY_ID` - Tigris access key ID
@@ -211,10 +219,17 @@ pytest --cov=src tests/
    - Checks response length
    - Detects hallucinations
 
-7. **Token Manager** (`token_manager.py`)
-   - Manages OAuth access tokens
+7. **Token Extractor** (modular interface)
+   - **Abstract Interface** (`token_extractor.py`) - Defines the contract for token storage
+   - **Local Disk Token Extractor** (`local_disk_token_extractor.py`) - Stores tokens in local JSON files (extends `BaseLocalDiskExtractor`)
+   - **Tigris Token Extractor** (`tigris_token_extractor.py`) - Stores tokens in Tigris object storage (extends `BaseTigrisExtractor`)
+   - **Factory** (`token_extractor_factory.py`) - Creates appropriate extractor based on `OAUTH_TOKEN_STORAGE_TYPE`
+   
+   Features:
+   - Manages OAuth access tokens with automatic refresh
    - Stores long-lived tokens (60-day validity)
-   - Automatically refreshes tokens before expiration
+   - Automatically refreshes tokens before expiration (5-day buffer)
+   - Supports distributed deployments with shared Tigris storage
    - Handles token expiration checks
 
 8. **Dashboard** (`dashboard.py`)

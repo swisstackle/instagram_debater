@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 
 from src.file_utils import load_json_file, save_json_file
 from src.config import Config
-from src.token_manager import TokenManager
+from src.token_extractor_factory import create_token_extractor
 from src.audit_log_extractor_factory import create_audit_log_extractor
 from src.audit_log_extractor import AuditLogExtractor
 
@@ -171,9 +171,8 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         raise HTTPException(status_code=404, detail="Response not found")
 
     # ================== OAUTH ENDPOINTS ==================
-    # Initialize config and token manager
+    # Initialize config
     config = Config()
-    token_manager = TokenManager(state_dir=state_dir)
     
     # Store OAuth state with timestamps (in production, use session storage or Redis)
     oauth_states = {}
@@ -269,7 +268,8 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 raise HTTPException(status_code=400, detail="Failed to get long-lived token")
             
             # Step 3: Store long-lived token
-            token_manager.save_token(
+            token_extractor = create_token_extractor()
+            token_extractor.save_token(
                 access_token=long_lived_data['access_token'],
                 token_type=long_lived_data.get('token_type', 'bearer'),
                 expires_in=long_lived_data.get('expires_in', 5184000),
@@ -296,7 +296,8 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         Removes stored token and clears session.
         """
         logger.info("GET /auth/instagram/logout")
-        token_manager.clear_token()
+        token_extractor = create_token_extractor()
+        token_extractor.clear_token()
         logger.info("GET /auth/instagram/logout - 303 Token cleared, redirecting to dashboard")
         return RedirectResponse(url="/", status_code=303)
 
@@ -375,8 +376,9 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         """Dashboard home page."""
         logger.info("GET /")
         # Check if user is authenticated
-        token_data = token_manager.get_token()
-        is_authenticated = token_data is not None and not token_manager.is_token_expired()
+        token_extractor = create_token_extractor()
+        token_data = token_extractor.get_token()
+        is_authenticated = token_data is not None and not token_extractor.is_token_expired()
         
         # Build auth section HTML
         if is_authenticated:
