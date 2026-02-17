@@ -77,7 +77,7 @@ class Config:
             logger.debug("OAuth token storage error: %s", exc)
         
         # Fall back to environment variable if OAuth unavailable or failed
-        logger.info("Using environment variable token (OAuth unavailable or failed)")
+        logger.info("config py: Using environment variable token (OAuth unavailable or failed)")
         return os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 
     @property
