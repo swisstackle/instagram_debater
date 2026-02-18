@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, Response, JSONResponse
 
 from src.file_utils import load_json_file, save_json_file
 from src.config import Config
@@ -89,7 +89,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         """Get all responses from audit log."""
         logger.info("GET /api/responses")
         audit_log = load_audit_log()
-        return {"responses": audit_log.get("entries", [])}
+        response = JSONResponse(content={"responses": audit_log.get("entries", [])})
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
     @app.get("/api/responses/pending")
     async def get_pending_responses():
@@ -98,7 +102,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         audit_log = load_audit_log()
         entries = audit_log.get("entries", [])
         pending = [e for e in entries if e.get("status") == "pending_review"]
-        return {"responses": pending}
+        response = JSONResponse(content={"responses": pending})
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
     @app.post("/api/responses/{response_id}/approve")
     async def approve_response(response_id: str):
@@ -116,7 +124,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 }
                 update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/approve - 200")
-                return {"status": "ok", "response_id": response_id}
+                response = JSONResponse(content={"status": "ok", "response_id": response_id})
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
 
         logger.warning(f"POST /api/responses/{sanitized_id}/approve - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")
@@ -141,7 +153,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 }
                 update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/reject - 200")
-                return {"status": "ok", "response_id": response_id}
+                response = JSONResponse(content={"status": "ok", "response_id": response_id})
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
 
         logger.warning(f"POST /api/responses/{sanitized_id}/reject - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")
@@ -165,7 +181,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 }
                 update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/edit - 200")
-                return {"status": "ok", "response_id": response_id}
+                response = JSONResponse(content={"status": "ok", "response_id": response_id})
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
 
         logger.warning(f"POST /api/responses/{sanitized_id}/edit - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")

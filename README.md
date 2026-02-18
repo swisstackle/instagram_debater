@@ -33,6 +33,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 │   ├── token_extractor_factory.py   # Factory for creating token extractors
 │   ├── local_disk_token_extractor.py # Local disk OAuth token storage (implements token_extractor)
 │   ├── tigris_token_extractor.py    # Tigris/S3 OAuth token storage (implements token_extractor)
+│   ├── env_var_token_extractor.py   # Environment variable token storage (implements token_extractor)
 │   ├── config.py                    # Configuration management
 │   ├── file_utils.py                # File utility functions
 │   ├── instagram_api.py             # Instagram Graph API wrapper
@@ -103,9 +104,10 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible)
    
    **OAuth token storage:**
-   - `OAUTH_TOKEN_STORAGE_TYPE` - Storage backend for OAuth tokens (`local` or `tigris`, default: `local`)
-     - `local` - Uses local disk storage (`state/instagram_token.json`)
+   - `OAUTH_TOKEN_STORAGE_TYPE` - Storage backend for OAuth tokens (`local`, `tigris`, or `env_var`, default: `local`)
+     - `local` - Uses local disk storage (`state/instagram_token.json`) with automatic OAuth refresh
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible, recommended for distributed deployments)
+     - `env_var` - Reads token directly from `INSTAGRAM_ACCESS_TOKEN` environment variable (read-only, no refresh)
    
    **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris` or `AUDIT_LOG_STORAGE_TYPE=tigris`):**
    - `AWS_ACCESS_KEY_ID` - Tigris access key ID

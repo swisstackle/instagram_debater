@@ -159,8 +159,8 @@ class InstagramAPI:
                     # OAuthException - token is invalid
                     logger.error(
                         "OAuth token invalid (code 190): %s. "
-                        "Token may be expired, revoked, or lack required scopes.",
-                        error_msg
+                        "Token may be expired, revoked, or lack required scopes. Token used: %s",
+                        error_msg, self.access_token
                     )
                 elif error_code in [104, 100]:
                     # Token/permission issues
