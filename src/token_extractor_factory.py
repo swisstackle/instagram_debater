@@ -30,6 +30,8 @@ def create_token_extractor(state_dir: str = "state") -> TokenExtractor:
 
     if storage_type == "tigris":
         return TigrisTokenExtractor()
+    elif storage_type == "local":
+        return LocalDiskTokenExtractor(state_dir=state_dir)
 
     # Default to local for any other value (including "local", "", None, etc.)
     return LocalDiskTokenExtractor(state_dir=state_dir)
