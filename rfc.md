@@ -178,6 +178,7 @@ These constraints are **non-negotiable** and define the architecture:
 │   ├── token_extractor_factory.py    # Factory for creating token extractors
 │   ├── local_disk_token_extractor.py # Local disk OAuth token implementation
 │   ├── tigris_token_extractor.py     # Tigris/S3 OAuth token implementation
+│   ├── env_var_token_extractor.py    # Environment variable token implementation
 │   ├── webhook_receiver.py           # Webhook endpoint
 │   ├── processor.py                  # Main processing loop
 │   ├── instagram_api.py              # Instagram Graph API wrapper
@@ -237,6 +238,9 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 *Audit Log Storage:*
 - `AUDIT_LOG_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
 
+*OAuth Token Storage:*
+- `OAUTH_TOKEN_STORAGE_TYPE` - Storage backend type (`local`, `tigris`, or `env_var`, default: `local`)
+
 *Tigris/S3 Configuration (when using Tigris for either storage type):*
 - `AWS_ACCESS_KEY_ID` - Tigris access key ID
 - `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
@@ -271,6 +275,17 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 - `LocalDiskAuditExtractor` (extends `BaseLocalDiskExtractor`) - Local JSON file storage
 - `TigrisAuditExtractor` (extends `BaseTigrisExtractor`) - S3-compatible object storage
 - Factory: `create_audit_log_extractor()` - Creates appropriate extractor based on `AUDIT_LOG_STORAGE_TYPE`
+
+*OAuth Token Storage:*
+- `LocalDiskTokenExtractor` (extends `BaseLocalDiskExtractor`) - Local JSON file storage with automatic token refresh
+- `TigrisTokenExtractor` (extends `BaseTigrisExtractor`) - S3-compatible object storage with automatic token refresh
+- `EnvVarTokenExtractor` - Environment variable storage (read-only, no refresh capability)
+- Factory: `create_token_extractor()` - Creates appropriate extractor based on `OAUTH_TOKEN_STORAGE_TYPE`
+
+**Token Storage Use Cases:**
+- **`local` (Default):** Single-machine deployments where OAuth tokens are automatically refreshed and persisted to local disk
+- **`tigris`:** Distributed deployments where multiple processes need shared access to refreshable auth tokens
+- **`env_var`:** Simple deployments where tokens are managed externally (e.g., CI/CD, secrets management) without automatic refresh
 
 **Use Case:**
 When running the bot on Fly.io with separate process groups (webhook, dashboard, scheduler), 
