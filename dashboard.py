@@ -216,7 +216,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             'client_id': config.instagram_client_id,
             'redirect_uri': config.instagram_redirect_uri,
             'response_type': 'code',
-            'scope': 'instagram_business_basic,instagram_business_manage_comments,pages_show_list',
+            'scope': 'instagram_business_basic,instagram_business_manage_comments,pages_show_list,page_read_engagement,ads_read',
             'state': state
         }
         
