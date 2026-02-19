@@ -90,9 +90,6 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         logger.info("GET /api/responses")
         audit_log = load_audit_log()
         response = JSONResponse(content={"responses": audit_log.get("entries", [])})
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
         return response
 
     @app.get("/api/responses/pending")
@@ -103,9 +100,6 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         entries = audit_log.get("entries", [])
         pending = [e for e in entries if e.get("status") == "pending_review"]
         response = JSONResponse(content={"responses": pending})
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
         return response
 
     @app.post("/api/responses/{response_id}/approve")
@@ -125,9 +119,6 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/approve - 200")
                 response = JSONResponse(content={"status": "ok", "response_id": response_id})
-                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-                response.headers["Pragma"] = "no-cache"
-                response.headers["Expires"] = "0"
                 return response
 
         logger.warning(f"POST /api/responses/{sanitized_id}/approve - 404 Response not found")
@@ -154,9 +145,6 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/reject - 200")
                 response = JSONResponse(content={"status": "ok", "response_id": response_id})
-                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-                response.headers["Pragma"] = "no-cache"
-                response.headers["Expires"] = "0"
                 return response
 
         logger.warning(f"POST /api/responses/{sanitized_id}/reject - 404 Response not found")
@@ -182,9 +170,6 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 update_audit_entry(response_id, updates)
                 logger.info(f"POST /api/responses/{sanitized_id}/edit - 200")
                 response = JSONResponse(content={"status": "ok", "response_id": response_id})
-                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-                response.headers["Pragma"] = "no-cache"
-                response.headers["Expires"] = "0"
                 return response
 
         logger.warning(f"POST /api/responses/{sanitized_id}/edit - 404 Response not found")

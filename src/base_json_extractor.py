@@ -178,5 +178,6 @@ class BaseTigrisExtractor(ABC):
             Bucket=self.bucket_name,
             Key=self._get_object_key(),
             Body=json_content,
-            ContentType='application/json'
+            ContentType='application/json',
+            CacheControl='no-cache, no-store, must-revalidate'
         )
