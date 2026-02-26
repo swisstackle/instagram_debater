@@ -15,7 +15,8 @@ def main():
     # Initialize webhook receiver
     init_webhook_receiver(
         verify_token=config.instagram_verify_token,
-        app_secret=config.instagram_app_secret
+        app_secret=config.instagram_app_secret,
+        instagram_username=config.instagram_username
     )
 
     print("Starting webhook server...")

@@ -168,3 +168,8 @@ class Config:
     def instagram_redirect_uri(self) -> str:
         """Get Instagram OAuth redirect URI."""
         return os.getenv("INSTAGRAM_REDIRECT_URI", "http://127.0.0.1:5000/auth/instagram/callback")
+
+    @property
+    def instagram_username(self) -> str:
+        """Get the bot's own Instagram username (used to filter self-replies)."""
+        return os.getenv("INSTAGRAM_USERNAME", "")

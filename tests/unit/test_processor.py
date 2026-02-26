@@ -1169,6 +1169,108 @@ More text here.
                 # Should call token validation before posting
                 mock_token_check.assert_called_once()
 
+    def test_run_skips_own_comments_single_article(self, processor, sample_article, mock_config, capsys):
+        """Test that the processor skips comments from its own Instagram account (single-article mode)."""
+        mock_config.instagram_username = "mybotaccount"
+        mock_config.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
+
+        own_comment = {
+            "comment_id": "comment_own_1",
+            "post_id": "post_456",
+            "username": "mybotaccount",
+            "text": "A reply I posted myself"
+        }
+        other_comment = {
+            "comment_id": "comment_other_1",
+            "post_id": "post_456",
+            "username": "someotheruser",
+            "text": "A comment from another user"
+        }
+        comments = [own_comment, other_comment]
+
+        with patch.object(processor, 'load_article', return_value=sample_article):
+            with patch.object(processor, 'load_pending_comments', return_value=comments):
+                with patch.object(processor, 'process_comment') as mock_process:
+                    mock_process.return_value = {"comment_id": "comment_other_1", "status": "pending_review"}
+                    with patch.object(processor, 'save_audit_log'):
+                        with patch.object(processor, 'post_approved_responses'):
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+
+                                # process_comment should be called only for the non-own comment
+                                assert mock_process.call_count == 1
+                                call_comment = mock_process.call_args[0][0]
+                                assert call_comment["comment_id"] == "comment_other_1"
+
+    def test_run_skips_own_comments_multi_article(self, processor, mock_config, capsys):
+        """Test that the processor skips comments from its own Instagram account (multi-article mode)."""
+        mock_config.instagram_username = "mybotaccount"
+        articles_config = [
+            {"path": "articles/article1.md", "link": "https://example.com/article1"},
+            {"path": "articles/article2.md", "link": "https://example.com/article2"}
+        ]
+        mock_config.articles_config = articles_config
+
+        own_comment = {
+            "comment_id": "comment_own_2",
+            "post_id": "post_456",
+            "username": "mybotaccount",
+            "text": "My own reply"
+        }
+        other_comment = {
+            "comment_id": "comment_other_2",
+            "post_id": "post_456",
+            "username": "anotheruser",
+            "text": "Another user comment"
+        }
+        comments = [own_comment, other_comment]
+
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent.",
+                "title": "Article 1",
+                "summary": "Content."
+            }
+        ]
+
+        with patch.object(processor, 'load_articles', return_value=articles):
+            with patch.object(processor, 'load_pending_comments', return_value=comments):
+                with patch.object(processor, 'process_comment_multi_article') as mock_process:
+                    mock_process.return_value = {"comment_id": "comment_other_2", "status": "pending_review"}
+                    with patch.object(processor, 'save_audit_log'):
+                        with patch.object(processor, 'post_approved_responses'):
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+
+                                # process_comment_multi_article should be called only for the non-own comment
+                                assert mock_process.call_count == 1
+                                call_comment = mock_process.call_args[0][0]
+                                assert call_comment["comment_id"] == "comment_other_2"
+
+    def test_run_own_comment_filtering_case_insensitive(self, processor, sample_article, mock_config, capsys):
+        """Test that own-comment filtering in the processor is case-insensitive."""
+        mock_config.instagram_username = "MyBotAccount"
+        mock_config.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
+
+        own_comment = {
+            "comment_id": "comment_own_3",
+            "post_id": "post_456",
+            "username": "mybotaccount",  # lowercase, should still match
+            "text": "My own reply"
+        }
+
+        with patch.object(processor, 'load_article', return_value=sample_article):
+            with patch.object(processor, 'load_pending_comments', return_value=[own_comment]):
+                with patch.object(processor, 'process_comment') as mock_process:
+                    with patch.object(processor, 'post_approved_responses'):
+                        with patch.object(processor, 'clear_pending_comments'):
+                            processor.run()
+
+                            # Should not process own comment
+                            mock_process.assert_not_called()
+
 
 class TestCommentProcessorUnnumbered:
     """Test suite for CommentProcessor with unnumbered articles."""
