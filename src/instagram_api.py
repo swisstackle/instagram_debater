@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class InstagramAPI:
     """Wrapper for Instagram Graph API operations."""
 
-    API_VERSION = "v18.0"
-    BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
+    API_VERSION = "v25.0"
+    BASE_URL = f"https://graph.instagram.com/{API_VERSION}"
 
     def __init__(self, access_token: str, app_secret: str):
         """
