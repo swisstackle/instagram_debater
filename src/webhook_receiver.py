@@ -17,7 +17,7 @@ app = FastAPI()
 _webhook_receiver = None  # pylint: disable=invalid-name
 
 
-def init_webhook_receiver(verify_token: str, app_secret: str, comment_extractor: CommentExtractor = None):
+def init_webhook_receiver(verify_token: str, app_secret: str, comment_extractor: CommentExtractor = None, instagram_username: str = ""):
     """
     Initialize the global webhook receiver instance.
     
@@ -25,15 +25,16 @@ def init_webhook_receiver(verify_token: str, app_secret: str, comment_extractor:
         verify_token: Token for webhook verification
         app_secret: App secret for signature verification
         comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
+        instagram_username: The bot's own Instagram username to filter self-replies
     """
     global _webhook_receiver  # pylint: disable=global-statement
-    _webhook_receiver = WebhookReceiver(verify_token, app_secret, comment_extractor)
+    _webhook_receiver = WebhookReceiver(verify_token, app_secret, comment_extractor, instagram_username)
 
 
 class WebhookReceiver:
     """Handles Instagram webhook events."""
 
-    def __init__(self, verify_token: str, app_secret: str, comment_extractor: CommentExtractor = None):
+    def __init__(self, verify_token: str, app_secret: str, comment_extractor: CommentExtractor = None, instagram_username: str = ""):
         """
         Initialize webhook receiver.
 
@@ -41,9 +42,11 @@ class WebhookReceiver:
             verify_token: Token for webhook verification
             app_secret: App secret for signature verification
             comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
+            instagram_username: The bot's own Instagram username to filter self-replies
         """
         self.verify_token = verify_token
         self.app_secret = app_secret
+        self.instagram_username = instagram_username.lower()
         
         # Use provided extractor or create one via factory
         if comment_extractor is None:
@@ -83,6 +86,11 @@ class WebhookReceiver:
             print(f"Processing entry: {entry}")
             comment_data = self.extract_comment_data(entry)
             if comment_data:
+                # Skip comments from the bot's own account
+                comment_username = (comment_data.get("username") or "").lower()
+                if self.instagram_username and comment_username == self.instagram_username:
+                    print(f"Ignoring own comment from @{comment_data.get('username')}")
+                    continue
                 print(f"Extracted comment data: {comment_data}")
                 self.save_pending_comment(comment_data)
                 print("Comment data saved successfully")

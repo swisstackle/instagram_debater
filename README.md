@@ -73,6 +73,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `INSTAGRAM_APP_SECRET` - Instagram app secret for webhook verification
    - `INSTAGRAM_ACCESS_TOKEN` - Instagram access token (or use OAuth login)
    - `INSTAGRAM_VERIFY_TOKEN` - Webhook verification token
+   - `INSTAGRAM_USERNAME` - Required when `OAUTH_TOKEN_STORAGE_TYPE=env_var` to enable self-reply filtering (optional otherwise)
    - `OPENROUTER_API_KEY` - OpenRouter API key for LLM access
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
 
@@ -112,6 +113,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
      - `local` - Uses local disk storage (`state/instagram_token.json`) with automatic OAuth refresh
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible, recommended for distributed deployments)
      - `env_var` - Reads token directly from `INSTAGRAM_ACCESS_TOKEN` environment variable (read-only, no refresh)
+          - Note: `env_var` mode does not provide a username; set `INSTAGRAM_USERNAME` explicitly if you need self-reply filtering
    
    **Auto-post mode storage:**
    - `MODE_STORAGE_TYPE` - Storage backend for the auto-post mode toggle (`local` or `tigris`, default: `local`)
@@ -178,6 +180,7 @@ pytest --cov=src tests/
 1. **Webhook Receiver** (`webhook_receiver.py`)
    - Receives Instagram webhook notifications
    - Verifies webhook signatures
+   - Filters out comments posted by the bot itself (self-reply prevention)
    - Saves comments to pending queue via comment extractor
 
 2. **Storage Extractors** (modular interfaces with base classes)
@@ -209,6 +212,7 @@ pytest --cov=src tests/
 
 3. **Comment Processor** (`processor.py`)
    - Loads pending comments via comment extractor
+   - Filters out any comments from the bot's own account (defense-in-depth)
    - Selects relevant article from multiple sources
    - Checks relevance using LLM
    - Generates responses with citations
@@ -270,6 +274,7 @@ pytest --cov=src tests/
 - **Zero Hallucination**: All responses cite article content
 - **Modular Storage**: Pluggable storage backends allow distributed deployment
 - **Transparent**: Clearly identifies as a bot
+- **No Self-Replies**: Bot automatically identifies its own account from the stored OAuth token and ignores its own comments
 
 ## API Reference
 

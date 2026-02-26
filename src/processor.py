@@ -547,6 +547,15 @@ class CommentProcessor:
         # Load pending comments
         comments = self.load_pending_comments()
 
+        # Filter out any comments from the bot's own account
+        own_username = (self.config.instagram_username or '').lower()
+        if own_username:
+            filtered = [c for c in comments if (c.get('username') or '').lower() != own_username]
+            if len(filtered) < len(comments):
+                skipped = len(comments) - len(filtered)
+                print(f"Skipping {skipped} comment(s) from own account (@{own_username})")
+            comments = filtered
+
         if not comments:
             print("No pending comments to process")
         else:

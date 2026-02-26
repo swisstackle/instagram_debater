@@ -141,6 +141,126 @@ class TestWebhookReceiver:
             assert call_args["username"] == "testuser"
             assert call_args["text"] == "Test comment"
 
+    def test_process_webhook_payload_ignores_own_comments(self):
+        """Test that the webhook receiver does not save comments from its own account."""
+        receiver = WebhookReceiver(
+            verify_token="test_verify_token",
+            app_secret="test_app_secret",
+            instagram_username="mybotaccount"
+        )
+
+        payload = {
+            "object": "instagram",
+            "entry": [
+                {
+                    "id": "account-123",
+                    "time": 1704067200,
+                    "changes": [
+                        {
+                            "field": "comments",
+                            "value": {
+                                "from": {
+                                    "id": "bot-user-id",
+                                    "username": "mybotaccount"
+                                },
+                                "media": {
+                                    "id": "media-456"
+                                },
+                                "id": "comment-own-123",
+                                "text": "A reply I posted myself"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        with patch.object(receiver, 'save_pending_comment') as mock_save:
+            receiver.process_webhook_payload(payload)
+
+            # Should NOT save a comment from the bot's own account
+            mock_save.assert_not_called()
+
+    def test_process_webhook_payload_saves_other_users_comments(self):
+        """Test that the webhook receiver saves comments from other users even when own username is set."""
+        receiver = WebhookReceiver(
+            verify_token="test_verify_token",
+            app_secret="test_app_secret",
+            instagram_username="mybotaccount"
+        )
+
+        payload = {
+            "object": "instagram",
+            "entry": [
+                {
+                    "id": "account-123",
+                    "time": 1704067200,
+                    "changes": [
+                        {
+                            "field": "comments",
+                            "value": {
+                                "from": {
+                                    "id": "other-user-id",
+                                    "username": "someotheruser"
+                                },
+                                "media": {
+                                    "id": "media-456"
+                                },
+                                "id": "comment-789",
+                                "text": "A comment from another user"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        with patch.object(receiver, 'save_pending_comment') as mock_save:
+            receiver.process_webhook_payload(payload)
+
+            # Should save comment from another user
+            mock_save.assert_called_once()
+
+    def test_process_webhook_payload_case_insensitive_username_match(self):
+        """Test that own-comment filtering is case-insensitive."""
+        receiver = WebhookReceiver(
+            verify_token="test_verify_token",
+            app_secret="test_app_secret",
+            instagram_username="MyBotAccount"
+        )
+
+        payload = {
+            "object": "instagram",
+            "entry": [
+                {
+                    "id": "account-123",
+                    "time": 1704067200,
+                    "changes": [
+                        {
+                            "field": "comments",
+                            "value": {
+                                "from": {
+                                    "id": "bot-user-id",
+                                    "username": "mybotaccount"
+                                },
+                                "media": {
+                                    "id": "media-456"
+                                },
+                                "id": "comment-own-456",
+                                "text": "My own reply"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        with patch.object(receiver, 'save_pending_comment') as mock_save:
+            receiver.process_webhook_payload(payload)
+
+            # Should NOT save own comment regardless of case
+            mock_save.assert_not_called()
+
     def test_save_pending_comment(self, webhook_receiver):
         """Test saving comment to pending_comments.json."""
         comment_data = {

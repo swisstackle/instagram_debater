@@ -168,3 +168,25 @@ class Config:
     def instagram_redirect_uri(self) -> str:
         """Get Instagram OAuth redirect URI."""
         return os.getenv("INSTAGRAM_REDIRECT_URI", "http://127.0.0.1:5000/auth/instagram/callback")
+
+    @property
+    def instagram_username(self) -> str:
+        """Get the bot's own Instagram username (used to filter self-replies).
+
+        Prioritizes the username stored in the OAuth token data so it stays
+        in sync with whoever is currently logged in.  Falls back to the
+        INSTAGRAM_USERNAME environment variable if no OAuth token is available.
+        """
+        try:
+            from src.token_extractor_factory import create_token_extractor  # pylint: disable=import-outside-toplevel
+
+            extractor = create_token_extractor()
+            token_data = extractor.get_token()
+            if token_data:
+                username = token_data.get("username")
+                if username:
+                    return username
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.debug("OAuth token storage error when reading username: %s", exc)
+
+        return os.getenv("INSTAGRAM_USERNAME", "")
