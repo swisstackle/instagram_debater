@@ -329,3 +329,84 @@ class TestConfig:
             
             # Should fall back to env var on exception
             assert token == "env_var_token"
+
+    # instagram_username Tests
+    def test_instagram_username_from_oauth_token(self, monkeypatch):
+        """Test that instagram_username prefers username stored in OAuth token."""
+        token_data = {
+            "access_token": "some_token",
+            "token_type": "bearer",
+            "username": "oauth_bot_account"
+        }
+        monkeypatch.setenv("INSTAGRAM_USERNAME", "env_bot_account")
+
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = token_data
+            mock_factory.return_value = mock_extractor
+
+            config = Config()
+            username = config.instagram_username
+
+            # Should use OAuth token username, not env var
+            assert username == "oauth_bot_account"
+            mock_extractor.get_token.assert_called()
+
+    def test_instagram_username_falls_back_to_env_when_no_oauth_token(self, monkeypatch):
+        """Test that instagram_username falls back to env var when OAuth token absent."""
+        monkeypatch.setenv("INSTAGRAM_USERNAME", "env_bot_account")
+
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = None
+            mock_factory.return_value = mock_extractor
+
+            config = Config()
+            username = config.instagram_username
+
+            assert username == "env_bot_account"
+
+    def test_instagram_username_falls_back_to_env_when_token_has_no_username(self, monkeypatch):
+        """Test that instagram_username falls back to env var when token has no username field."""
+        token_data = {
+            "access_token": "some_token",
+            "token_type": "bearer"
+            # no 'username' key
+        }
+        monkeypatch.setenv("INSTAGRAM_USERNAME", "env_bot_account")
+
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = token_data
+            mock_factory.return_value = mock_extractor
+
+            config = Config()
+            username = config.instagram_username
+
+            assert username == "env_bot_account"
+
+    def test_instagram_username_handles_exception_falls_back_to_env(self, monkeypatch):
+        """Test that instagram_username handles token extractor exceptions gracefully."""
+        monkeypatch.setenv("INSTAGRAM_USERNAME", "env_bot_account")
+
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_factory.side_effect = Exception("Token extractor error")
+
+            config = Config()
+            username = config.instagram_username
+
+            assert username == "env_bot_account"
+
+    def test_instagram_username_returns_empty_when_no_source(self, monkeypatch):
+        """Test that instagram_username returns empty string when no OAuth token and no env var."""
+        monkeypatch.delenv("INSTAGRAM_USERNAME", raising=False)
+
+        with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
+            mock_extractor = MagicMock()
+            mock_extractor.get_token.return_value = None
+            mock_factory.return_value = mock_extractor
+
+            config = Config()
+            username = config.instagram_username
+
+            assert username == ""
