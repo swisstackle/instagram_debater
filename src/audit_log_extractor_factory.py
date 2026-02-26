@@ -8,7 +8,7 @@ from src.local_disk_audit_extractor import LocalDiskAuditExtractor
 from src.tigris_audit_extractor import TigrisAuditExtractor
 
 
-def create_audit_log_extractor() -> AuditLogExtractor:
+def create_audit_log_extractor(state_dir: str = "state") -> AuditLogExtractor:
     """
     Create an audit log extractor based on environment configuration.
     
@@ -16,6 +16,10 @@ def create_audit_log_extractor() -> AuditLogExtractor:
     which implementation to use:
     - 'local' or unset: LocalDiskAuditExtractor (default)
     - 'tigris': TigrisAuditExtractor
+    
+    Args:
+        state_dir: Directory for local disk storage (default: "state").
+            Only used when AUDIT_LOG_STORAGE_TYPE is 'local' or unset.
     
     Returns:
         AuditLogExtractor: Configured audit log extractor instance
@@ -26,4 +30,4 @@ def create_audit_log_extractor() -> AuditLogExtractor:
         return TigrisAuditExtractor()
     else:
         # Default to local disk storage
-        return LocalDiskAuditExtractor()
+        return LocalDiskAuditExtractor(state_dir=state_dir)

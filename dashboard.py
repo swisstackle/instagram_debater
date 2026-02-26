@@ -59,9 +59,8 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     Create a dashboard FastAPI application.
 
     Args:
-        state_dir: Directory to store state files (default: "state")
-            Note: This parameter is deprecated for audit log storage. 
-            To use a custom state_dir, pass a LocalDiskAuditExtractor instance.
+        state_dir: Directory to store state files (default: "state").
+            Used when no audit_log_extractor is provided and storage type is local disk.
         audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
 
     Returns:
@@ -71,7 +70,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     
     # Use provided audit log extractor or create one via factory
     if audit_log_extractor is None:
-        audit_log_extractor = create_audit_log_extractor()
+        audit_log_extractor = create_audit_log_extractor(state_dir=state_dir)
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():

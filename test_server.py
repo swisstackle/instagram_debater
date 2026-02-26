@@ -9,13 +9,12 @@ import uvicorn
 
 from dashboard import create_dashboard_app
 from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
-from src.local_disk_audit_extractor import LocalDiskAuditExtractor
 
 # Create the main test server app
 app = FastAPI()
 
 # Create and mount the dashboard app with test state directory
-dashboard_app = create_dashboard_app(audit_log_extractor=LocalDiskAuditExtractor(state_dir="test_state"))
+dashboard_app = create_dashboard_app(state_dir="test_state")
 
 # ================== STATE MANAGEMENT ==================
 STATE_DIR = "test_state"
