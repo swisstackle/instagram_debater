@@ -96,6 +96,7 @@ These constraints are **non-negotiable** and define the architecture:
 │                   Webhook Receiver (FastAPI)                  │
 │  - Verify webhook signature                                   │
 │  - Extract comment data                                       │
+│  - Filter own-account comments (self-reply prevention)        │
 │  - Save via CommentExtractor interface                        │
 └───────────────┬───────────────────────────────────────────────┘
                 │
@@ -104,13 +105,14 @@ These constraints are **non-negotiable** and define the architecture:
 │                  Main Processing Script                        │
 │  1. Load article from articles/ directory                     │
 │  2. Load pending comments via CommentExtractor                │
-│  3. For each comment:                                         │
+│  3. Filter own-account comments (defense-in-depth)            │
+│  4. For each comment:                                         │
 │     - Load full discussion context                            │
 │     - Build LLM prompt with article + context                 │
 │     - Request response from LLM                               │
 │     - Validate response (citations, tone, relevance)          │
 │     - Save via AuditLogExtractor interface                    │
-│  4. Post approved responses to Instagram                      │
+│  5. Post approved responses to Instagram                      │
 └───────────────┬───────────────────────────────────────────────┘
                 │
                 ▼
@@ -260,6 +262,9 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 - `MODE_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
   - **Use `tigris`** when the dashboard, processor, and webhook run on separate machines so they all share the same auto-post mode setting
 
+*Self-Reply Prevention:*
+- `INSTAGRAM_USERNAME` - (Optional) The bot's own Instagram username, used to discard self-replies. This is automatically read from the stored OAuth token when a user logs in via the dashboard; the env var is only a fallback for deployments that do not use the OAuth login flow.
+
 *Tigris/S3 Configuration (when using Tigris for either storage type):*
 - `AWS_ACCESS_KEY_ID` - Tigris access key ID
 - `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
@@ -341,11 +346,17 @@ on every run — no redeploy required to toggle between Auto and Manual modes.
    - Extract: `comment_id`, `post_id`, `comment_text`, `user_id`, `username`, `timestamp`
    - Validate required fields are present
 
-3. **Check Duplicates:**
+3. **Self-Reply Filter:**
+   - Read the bot's own username from the stored OAuth token (via `TokenExtractor.get_token()`)
+   - Compare comment `username` against bot's own username (case-insensitive)
+   - If match → silently discard and do not save to pending queue
+   - Falls back to `INSTAGRAM_USERNAME` env var if no OAuth token is available
+
+4. **Check Duplicates:**
    - Read `posted_ids.txt`
    - If `comment_id` exists, ignore (already processed)
 
-4. **Save to Pending:**
+5. **Save to Pending:**
    - Save comment data via CommentExtractor interface
    - Format: `{"comment_id": "...", "post_id": "...", "text": "...", "user": "...", "timestamp": "..."}`
    - Storage location depends on configured backend (local or Tigris)
@@ -364,7 +375,8 @@ on every run — no redeploy required to toggle between Auto and Manual modes.
 
 2. **Load Pending Comments:**
    - Load comments via CommentExtractor interface
-   - If empty, exit gracefully
+   - Filter out any comments whose `username` matches the bot's own account (defense-in-depth self-reply guard)
+   - If empty after filtering, exit gracefully
    - Otherwise, process each comment sequentially
 
 3. **For Each Comment:**

@@ -178,6 +178,7 @@ pytest --cov=src tests/
 1. **Webhook Receiver** (`webhook_receiver.py`)
    - Receives Instagram webhook notifications
    - Verifies webhook signatures
+   - Filters out comments posted by the bot itself (self-reply prevention)
    - Saves comments to pending queue via comment extractor
 
 2. **Storage Extractors** (modular interfaces with base classes)
@@ -209,6 +210,7 @@ pytest --cov=src tests/
 
 3. **Comment Processor** (`processor.py`)
    - Loads pending comments via comment extractor
+   - Filters out any comments from the bot's own account (defense-in-depth)
    - Selects relevant article from multiple sources
    - Checks relevance using LLM
    - Generates responses with citations
@@ -270,6 +272,7 @@ pytest --cov=src tests/
 - **Zero Hallucination**: All responses cite article content
 - **Modular Storage**: Pluggable storage backends allow distributed deployment
 - **Transparent**: Clearly identifies as a bot
+- **No Self-Replies**: Bot automatically identifies its own account from the stored OAuth token and ignores its own comments
 
 ## API Reference
 
