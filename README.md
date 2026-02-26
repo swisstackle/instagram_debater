@@ -73,6 +73,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `INSTAGRAM_APP_SECRET` - Instagram app secret for webhook verification
    - `INSTAGRAM_ACCESS_TOKEN` - Instagram access token (or use OAuth login)
    - `INSTAGRAM_VERIFY_TOKEN` - Webhook verification token
+   - `INSTAGRAM_USERNAME` - Required when `OAUTH_TOKEN_STORAGE_TYPE=env_var` to enable self-reply filtering (optional otherwise)
    - `OPENROUTER_API_KEY` - OpenRouter API key for LLM access
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
 
@@ -112,6 +113,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
      - `local` - Uses local disk storage (`state/instagram_token.json`) with automatic OAuth refresh
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible, recommended for distributed deployments)
      - `env_var` - Reads token directly from `INSTAGRAM_ACCESS_TOKEN` environment variable (read-only, no refresh)
+          - Note: `env_var` mode does not provide a username; set `INSTAGRAM_USERNAME` explicitly if you need self-reply filtering
    
    **Auto-post mode storage:**
    - `MODE_STORAGE_TYPE` - Storage backend for the auto-post mode toggle (`local` or `tigris`, default: `local`)

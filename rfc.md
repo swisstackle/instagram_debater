@@ -263,7 +263,7 @@ These base classes eliminate code duplication and ensure consistent behavior acr
   - **Use `tigris`** when the dashboard, processor, and webhook run on separate machines so they all share the same auto-post mode setting
 
 *Self-Reply Prevention:*
-- `INSTAGRAM_USERNAME` - (Optional) The bot's own Instagram username, used to discard self-replies. This is automatically read from the stored OAuth token when a user logs in via the dashboard; the env var is only a fallback for deployments that do not use the OAuth login flow.
+- `INSTAGRAM_USERNAME` - (Optional) The bot's own Instagram username, used to discard self-replies. This is automatically read from the stored OAuth token when a user logs in via the dashboard; the env var is only a fallback for deployments that do not use the OAuth login flow. If `OAUTH_TOKEN_STORAGE_TYPE=env_var`, you must set `INSTAGRAM_USERNAME` explicitly because the token data does not include a username.
 
 *Tigris/S3 Configuration (when using Tigris for either storage type):*
 - `AWS_ACCESS_KEY_ID` - Tigris access key ID
