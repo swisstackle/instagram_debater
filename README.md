@@ -34,6 +34,10 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 │   ├── local_disk_token_extractor.py # Local disk OAuth token storage (implements token_extractor)
 │   ├── tigris_token_extractor.py    # Tigris/S3 OAuth token storage (implements token_extractor)
 │   ├── env_var_token_extractor.py   # Environment variable token storage (implements token_extractor)
+│   ├── mode_extractor.py            # Abstract mode extractor interface
+│   ├── mode_extractor_factory.py    # Factory for creating mode extractors
+│   ├── local_disk_mode_extractor.py # Local disk auto-post mode storage (implements mode_extractor)
+│   ├── tigris_mode_extractor.py     # Tigris/S3 auto-post mode storage (implements mode_extractor)
 │   ├── config.py                    # Configuration management
 │   ├── file_utils.py                # File utility functions
 │   ├── instagram_api.py             # Instagram Graph API wrapper
@@ -109,6 +113,11 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
      - `tigris` - Uses Tigris object storage on Fly.io (S3-compatible, recommended for distributed deployments)
      - `env_var` - Reads token directly from `INSTAGRAM_ACCESS_TOKEN` environment variable (read-only, no refresh)
    
+   **Auto-post mode storage:**
+   - `MODE_STORAGE_TYPE` - Storage backend for the auto-post mode toggle (`local` or `tigris`, default: `local`)
+     - `local` - Stores mode in `state/mode.json` on local disk (single-machine deployments)
+     - `tigris` - Stores mode in Tigris object storage (`state/mode.json` in S3 bucket); use this when dashboard, processor, and webhook run on separate machines so all components read the same value
+   
    **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris` or `AUDIT_LOG_STORAGE_TYPE=tigris`):**
    - `AWS_ACCESS_KEY_ID` - Tigris access key ID
    - `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
@@ -121,6 +130,7 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    2. Copy the generated credentials to your `.env` file
    3. Set `COMMENT_STORAGE_TYPE=tigris` and/or `AUDIT_LOG_STORAGE_TYPE=tigris`
    4. The bot will automatically use Tigris for storing pending comments and/or audit logs
+   5. Set `MODE_STORAGE_TYPE=tigris` so the auto-post mode toggle is shared across all machines
    
    This is useful when running distributed systems where the webhook server, dashboard, 
    and comment processor are on different machines and need shared storage for both 
@@ -222,7 +232,7 @@ pytest --cov=src tests/
    - Checks response length
    - Detects hallucinations
 
-7. **Token Extractor** (modular interface)
+    **Token Extractor** (modular interface)
    - **Abstract Interface** (`token_extractor.py`) - Defines the contract for token storage
    - **Local Disk Token Extractor** (`local_disk_token_extractor.py`) - Stores tokens in local JSON files (extends `BaseLocalDiskExtractor`)
    - **Tigris Token Extractor** (`tigris_token_extractor.py`) - Stores tokens in Tigris object storage (extends `BaseTigrisExtractor`)
@@ -235,12 +245,21 @@ pytest --cov=src tests/
    - Supports distributed deployments with shared Tigris storage
    - Handles token expiration checks
 
-8. **Dashboard** (`dashboard.py`)
+8. **Mode Extractor** (modular interface)
+   - **Abstract Interface** (`mode_extractor.py`) - Defines the contract for mode storage (`get_auto_mode`, `set_auto_mode`)
+   - **Local Disk Mode Extractor** (`local_disk_mode_extractor.py`) - Stores mode in `state/mode.json` (extends `BaseLocalDiskExtractor`)
+   - **Tigris Mode Extractor** (`tigris_mode_extractor.py`) - Stores mode in Tigris object storage (extends `BaseTigrisExtractor`)
+   - **Factory** (`mode_extractor_factory.py`) - Creates appropriate extractor based on `MODE_STORAGE_TYPE`
+   
+   Enables all distributed components (dashboard, processor, webhook) to share the same auto-post mode setting.
+
+9. **Dashboard** (`dashboard.py`)
    - Web interface for reviewing responses
    - OAuth login/logout functionality
    - Displays authentication status
    - Shows token expiration information
    - Uses audit log extractor for reading/updating responses
+   - **Auto-post mode toggle** — switches between Auto and Manual modes; reads/writes via mode extractor so the change is immediately visible to the processor on any machine
 
 ## Design Principles
 
@@ -258,6 +277,11 @@ pytest --cov=src tests/
 
 - `GET /webhook/instagram` - Webhook verification
 - `POST /webhook/instagram` - Receive comment notifications
+
+### Dashboard Endpoints
+
+- `GET /api/mode` — returns `{"auto_mode": bool}`
+- `POST /api/mode` — sets the auto-post mode; body: `{"auto_mode": true|false}`
 
 ## Contributing
 
