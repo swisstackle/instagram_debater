@@ -59,9 +59,8 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     Create a dashboard FastAPI application.
 
     Args:
-        state_dir: Directory to store state files (default: "state")
-            Note: This parameter is deprecated for audit log storage. 
-            To use a custom state_dir, pass a LocalDiskAuditExtractor instance.
+        state_dir: Directory to store state files (default: "state").
+            Used when no audit_log_extractor is provided and storage type is local disk.
         audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
 
     Returns:
@@ -71,7 +70,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     
     # Use provided audit log extractor or create one via factory
     if audit_log_extractor is None:
-        audit_log_extractor = create_audit_log_extractor()
+        audit_log_extractor = create_audit_log_extractor(state_dir=state_dir)
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():
@@ -740,9 +739,13 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     <script>
         let currentFilter = 'pending_review';
         let responses = [];
+        let editingId = null;
 
         // Load responses
         async function loadResponses() {
+            if (editingId !== null) {
+                return;
+            }
             try {
                 const response = await fetch('/api/responses');
                 const data = await response.json();
@@ -880,6 +883,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
         // Edit response
         function editResponse(id) {
+            editingId = id;
             const responseDiv = document.querySelector(`.generated-response[data-response-id="${id}"]`);
             const textarea = document.querySelector(`.editable-response[data-response-id="${id}"]`);
             const card = document.querySelector(`.response-card[data-id="${id}"]`);
@@ -907,6 +911,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                     body: JSON.stringify({text: newText})
                 });
                 if (response.ok) {
+                    editingId = null;
                     await loadResponses();
                 }
             } catch (error) {
@@ -916,6 +921,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
         // Cancel edit
         function cancelEdit(id) {
+            editingId = null;
             loadResponses();
         }
 
