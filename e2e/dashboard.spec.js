@@ -192,6 +192,14 @@ test.describe('Dashboard UI Tests', () => {
     
     // Textarea should be visible
     await expect(page.locator('.editable-response')).toBeVisible();
+
+    // Wait longer than the auto-refresh interval (5 seconds) to verify edit state
+    // is NOT reset by the background auto-refresh
+    await page.waitForTimeout(6000);
+
+    // Textarea must still be visible and editable after auto-refresh fires
+    await expect(page.locator('.editable-response')).toBeVisible();
+    await expect(page.locator('.btn-save')).toBeVisible();
     
     // Edit the text
     await page.locator('.editable-response').clear();

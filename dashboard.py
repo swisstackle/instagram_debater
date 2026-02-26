@@ -740,9 +740,13 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     <script>
         let currentFilter = 'pending_review';
         let responses = [];
+        let editingId = null;
 
         // Load responses
         async function loadResponses() {
+            if (editingId !== null) {
+                return;
+            }
             try {
                 const response = await fetch('/api/responses');
                 const data = await response.json();
@@ -880,6 +884,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
         // Edit response
         function editResponse(id) {
+            editingId = id;
             const responseDiv = document.querySelector(`.generated-response[data-response-id="${id}"]`);
             const textarea = document.querySelector(`.editable-response[data-response-id="${id}"]`);
             const card = document.querySelector(`.response-card[data-id="${id}"]`);
@@ -907,6 +912,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                     body: JSON.stringify({text: newText})
                 });
                 if (response.ok) {
+                    editingId = null;
                     await loadResponses();
                 }
             } catch (error) {
@@ -916,6 +922,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
         // Cancel edit
         function cancelEdit(id) {
+            editingId = null;
             loadResponses();
         }
 
