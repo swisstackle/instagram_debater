@@ -70,17 +70,23 @@ class TestConfig:
         assert config.temperature == 0.7
         assert isinstance(config.temperature, float)
 
-    def test_auto_post_enabled_property_true(self, monkeypatch):
+    def test_auto_post_enabled_property_true(self, monkeypatch, tmp_path):
         """Test auto_post_enabled property when true."""
-        monkeypatch.setenv("AUTO_POST_ENABLED", "true")
-        config = Config()
-        assert config.auto_post_enabled is True
+        from src.local_disk_mode_extractor import LocalDiskModeExtractor
+        extractor = LocalDiskModeExtractor(state_dir=str(tmp_path))
+        extractor.set_auto_mode(True)
+        with patch('src.mode_extractor_factory.create_mode_extractor', return_value=extractor):
+            config = Config()
+            assert config.auto_post_enabled is True
 
-    def test_auto_post_enabled_property_false(self, monkeypatch):
+    def test_auto_post_enabled_property_false(self, monkeypatch, tmp_path):
         """Test auto_post_enabled property when false."""
-        monkeypatch.setenv("AUTO_POST_ENABLED", "false")
-        config = Config()
-        assert config.auto_post_enabled is False
+        from src.local_disk_mode_extractor import LocalDiskModeExtractor
+        extractor = LocalDiskModeExtractor(state_dir=str(tmp_path))
+        extractor.set_auto_mode(False)
+        with patch('src.mode_extractor_factory.create_mode_extractor', return_value=extractor):
+            config = Config()
+            assert config.auto_post_enabled is False
 
     def test_articles_config_single_article(self, monkeypatch):
         """Test articles_config property with single article (JSON format)."""

@@ -385,4 +385,91 @@ test.describe('Dashboard UI Tests', () => {
     await expect(page.locator('.response-card')).toBeVisible();
     await expect(page.locator('.response-id')).toContainText('log_001');
   });
+
+  test('displays mode toggle', async ({ page }) => {
+    await page.goto('/');
+
+    // The mode toggle should be visible
+    await expect(page.locator('#auto-mode-toggle')).toBeVisible();
+    await expect(page.locator('#mode-status-label')).toBeVisible();
+  });
+
+  test('mode toggle reflects current mode via API', async ({ page, request }) => {
+    await page.goto('/');
+
+    // Wait for mode to load via API
+    await page.waitForResponse(resp => resp.url().includes('/api/mode') && resp.status() === 200);
+
+    // Load initial mode from API
+    const modeResponse = await request.get('/api/mode');
+    const modeData = await modeResponse.json();
+
+    // The toggle should reflect the current mode
+    const toggle = page.locator('#auto-mode-toggle');
+    if (modeData.auto_mode) {
+      await expect(toggle).toBeChecked();
+      await expect(page.locator('#mode-status-label')).toContainText('Auto');
+    } else {
+      await expect(toggle).not.toBeChecked();
+      await expect(page.locator('#mode-status-label')).toContainText('Manual');
+    }
+  });
+
+  test('can enable auto mode via toggle', async ({ page, request }) => {
+    // Ensure auto mode is off initially
+    await request.post('/api/mode', { data: { auto_mode: false } });
+
+    await page.goto('/');
+
+    // Wait for mode to load via API
+    await page.waitForResponse(resp => resp.url().includes('/api/mode') && resp.status() === 200);
+
+    // Toggle should be unchecked
+    await expect(page.locator('#auto-mode-toggle')).not.toBeChecked();
+    await expect(page.locator('#mode-status-label')).toContainText('Manual');
+
+    // Click the toggle to enable auto mode and wait for the POST response
+    const [modePostResponse] = await Promise.all([
+      page.waitForResponse(resp => resp.url().includes('/api/mode') && resp.request().method() === 'POST'),
+      page.locator('#auto-mode-toggle').click(),
+    ]);
+    expect(modePostResponse.status()).toBe(200);
+
+    // Label should update to Auto
+    await expect(page.locator('#mode-status-label')).toContainText('Auto');
+
+    // Verify via API
+    const modeResponse = await request.get('/api/mode');
+    const modeData = await modeResponse.json();
+    expect(modeData.auto_mode).toBe(true);
+  });
+
+  test('can disable auto mode via toggle', async ({ page, request }) => {
+    // Ensure auto mode is on initially
+    await request.post('/api/mode', { data: { auto_mode: true } });
+
+    await page.goto('/');
+
+    // Wait for mode to load via API
+    await page.waitForResponse(resp => resp.url().includes('/api/mode') && resp.status() === 200);
+
+    // Toggle should be checked
+    await expect(page.locator('#auto-mode-toggle')).toBeChecked();
+    await expect(page.locator('#mode-status-label')).toContainText('Auto');
+
+    // Click the toggle to disable auto mode and wait for the POST response
+    const [modePostResponse] = await Promise.all([
+      page.waitForResponse(resp => resp.url().includes('/api/mode') && resp.request().method() === 'POST'),
+      page.locator('#auto-mode-toggle').click(),
+    ]);
+    expect(modePostResponse.status()).toBe(200);
+
+    // Label should update to Manual
+    await expect(page.locator('#mode-status-label')).toContainText('Manual');
+
+    // Verify via API
+    const modeResponse = await request.get('/api/mode');
+    const modeData = await modeResponse.json();
+    expect(modeData.auto_mode).toBe(false);
+  });
 });

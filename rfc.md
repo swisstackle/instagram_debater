@@ -3,7 +3,7 @@
 **Status:** Draft
 **Author:** fparticle team
 **Created:** 2026-01-31
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-26
 
 ---
 
@@ -141,7 +141,17 @@ These constraints are **non-negotiable** and define the architecture:
 │  │  Configured via AUDIT_LOG_STORAGE_TYPE                 │   │
 │  └────────────────────────────────────────────────────────┘   │
 │                                                                │
-│  Both comment and audit log storage support:                  │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │        Auto-Post Mode Storage (ModeExtractor)          │   │
+│  │  ┌──────────────────┐    ┌──────────────────────┐     │   │
+│  │  │LocalDiskMode     │    │  TigrisMode          │     │   │
+│  │  │Extractor         │    │  Extractor           │     │   │
+│  │  └──────────────────┘    └──────────────────────┘     │   │
+│  │  Configured via MODE_STORAGE_TYPE                      │   │
+│  │  Shared by dashboard, processor, and webhook           │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                │
+│  All storage systems support:                                  │
 │  - local: Uses state/*.json files                             │
 │  - tigris: Uses Tigris object storage on Fly.io               │
 │                                                                │
@@ -162,6 +172,7 @@ These constraints are **non-negotiable** and define the architecture:
 ├── state/
 │   ├── pending_comments.json               # When using local storage
 │   ├── audit_log.json                      # When using local storage
+│   ├── mode.json                           # When using local mode storage
 │   ├── no_match_log.json                   # Always local
 │   └── posted_ids.txt                      # Always local
 ├── src/
@@ -179,6 +190,10 @@ These constraints are **non-negotiable** and define the architecture:
 │   ├── local_disk_token_extractor.py # Local disk OAuth token implementation
 │   ├── tigris_token_extractor.py     # Tigris/S3 OAuth token implementation
 │   ├── env_var_token_extractor.py    # Environment variable token implementation
+│   ├── mode_extractor.py             # Abstract mode extractor interface
+│   ├── mode_extractor_factory.py     # Factory for creating mode extractors
+│   ├── local_disk_mode_extractor.py  # Local disk auto-post mode implementation
+│   ├── tigris_mode_extractor.py      # Tigris/S3 auto-post mode implementation
 │   ├── webhook_receiver.py           # Webhook endpoint
 │   ├── processor.py                  # Main processing loop
 │   ├── instagram_api.py              # Instagram Graph API wrapper
@@ -241,6 +256,10 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 *OAuth Token Storage:*
 - `OAUTH_TOKEN_STORAGE_TYPE` - Storage backend type (`local`, `tigris`, or `env_var`, default: `local`)
 
+*Auto-Post Mode Storage:*
+- `MODE_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
+  - **Use `tigris`** when the dashboard, processor, and webhook run on separate machines so they all share the same auto-post mode setting
+
 *Tigris/S3 Configuration (when using Tigris for either storage type):*
 - `AWS_ACCESS_KEY_ID` - Tigris access key ID
 - `AWS_SECRET_ACCESS_KEY` - Tigris secret access key
@@ -253,12 +272,14 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 1. **Local Disk Storage** (`STORAGE_TYPE=local`)
    - Comments: `state/pending_comments.json`
    - Audit Logs: `state/audit_log.json`
+   - Mode: `state/mode.json`
    - Suitable for single-machine deployments
    - Default option, no additional configuration required
 
 2. **Tigris Object Storage** (`STORAGE_TYPE=tigris`)
    - Comments: `state/pending_comments.json` (in S3 bucket)
    - Audit Logs: `state/audit_log.json` (in S3 bucket)
+   - Mode: `state/mode.json` (in S3 bucket)
    - Suitable for distributed deployments on Fly.io
    - Allows webhook server, dashboard, and processor to run on different machines
    - Requires Tigris bucket creation: `fly storage create`
@@ -282,6 +303,11 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 - `EnvVarTokenExtractor` - Environment variable storage (read-only, no refresh capability)
 - Factory: `create_token_extractor()` - Creates appropriate extractor based on `OAUTH_TOKEN_STORAGE_TYPE`
 
+*Auto-Post Mode Storage:*
+- `LocalDiskModeExtractor` (extends `BaseLocalDiskExtractor`) - Stores `state/mode.json` on local disk
+- `TigrisModeExtractor` (extends `BaseTigrisExtractor`) - Stores `state/mode.json` in S3-compatible object storage
+- Factory: `create_mode_extractor()` - Creates appropriate extractor based on `MODE_STORAGE_TYPE`
+
 **Token Storage Use Cases:**
 - **`local` (Default):** Single-machine deployments where OAuth tokens are automatically refreshed and persisted to local disk
 - **`tigris`:** Distributed deployments where multiple processes need shared access to refreshable auth tokens
@@ -292,6 +318,10 @@ When running the bot on Fly.io with separate process groups (webhook, dashboard,
 both the webhook server and processor can save/read comments and audit logs to/from Tigris storage, 
 enabling true horizontal scaling without shared filesystem. Each component can independently 
 configure its storage backends, allowing mixed configurations (e.g., local comments with Tigris audit logs).
+
+Setting `MODE_STORAGE_TYPE=tigris` is strongly recommended for distributed deployments: 
+the dashboard writes the auto-post mode to Tigris, and the processor reads it from Tigris 
+on every run — no redeploy required to toggle between Auto and Manual modes.
 
 ---
 
@@ -387,6 +417,7 @@ configure its storage backends, allowing mixed configurations (e.g., local comme
      ```
 
 4. **Post Responses:**
+   - Read current mode via `ModeExtractor.get_auto_mode()` (shared via Tigris in distributed deployments)
    - If auto-post enabled:
      - For each approved response, call Instagram API to post comment
      - Add `comment_id` to `posted_ids.txt`
@@ -784,6 +815,29 @@ Stores comments deemed irrelevant or unmatchable.
   - `relevance_score` (float, optional): Numeric relevance score (0.0-1.0)
   - `timestamp` (string, required): When assessed (ISO 8601)
 
+### 9.4 `mode.json`
+
+Stores the auto-post mode setting. Used by the dashboard (write) and processor (read).
+
+**Storage Backends:**
+- **Local**: `state/mode.json`
+- **Tigris**: `state/mode.json` (in S3 bucket) — use for distributed deployments
+
+**Format:**
+```json
+{
+  "auto_mode": false
+}
+```
+
+**Schema:**
+- `auto_mode` (boolean, required): `true` = auto-post enabled, `false` = manual review required
+
+**Access:**
+- Read via `ModeExtractor.get_auto_mode()` — returns `false` when file/object does not exist
+- Written via `ModeExtractor.set_auto_mode(value)`
+- `Config.auto_post_enabled` delegates to the mode extractor factory for all components
+
 ---
 
 ## 10. Token Limit & Truncation Policy
@@ -846,8 +900,14 @@ All generated responses must pass these checks before being saved or posted:
   - Approve (posts to Instagram)
   - Reject (logs reason, doesn't post)
   - Edit (modify response, then approve)
+- **Auto-post mode toggle** — switch between Auto and Manual modes at runtime without a redeploy
 
-**Tech Stack:** Simple web UI (Flask + Bootstrap, or React)
+**Auto-Post Mode API:**
+- `GET /api/mode` — returns `{"auto_mode": bool}`
+- `POST /api/mode` — sets the mode; body: `{"auto_mode": true|false}`, validates boolean type (400 on invalid input)
+- Reads/writes via `ModeExtractor`; set `MODE_STORAGE_TYPE=tigris` so the processor on a separate machine picks up the change immediately
+
+**Tech Stack:** Simple web UI (FastAPI + Bootstrap)
 
 ### 12.2 Manual Workflows
 
