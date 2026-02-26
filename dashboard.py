@@ -175,6 +175,31 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         logger.warning(f"POST /api/responses/{sanitized_id}/edit - 404 Response not found")
         raise HTTPException(status_code=404, detail="Response not found")
 
+    # ================== MODE EDITOR ENDPOINTS ==================
+    @app.get("/api/mode")
+    async def get_mode():
+        """Get the current auto mode setting."""
+        logger.info("GET /api/mode")
+        value = os.getenv("AUTO_POST_ENABLED", "false").lower()
+        auto_mode = value in ["true", "1", "yes"]
+        response = JSONResponse(content={"auto_mode": auto_mode})
+        logger.info(f"GET /api/mode - 200 auto_mode={auto_mode}")
+        return response
+
+    @app.post("/api/mode")
+    async def set_mode(request: Request):
+        """Set the auto mode setting."""
+        logger.info("POST /api/mode")
+        data = await request.json()
+        if "auto_mode" not in data or not isinstance(data["auto_mode"], bool):
+            logger.warning("POST /api/mode - 400 Invalid or missing auto_mode field")
+            raise HTTPException(status_code=400, detail="auto_mode field must be a boolean")
+        auto_mode = data["auto_mode"]
+        os.environ["AUTO_POST_ENABLED"] = "true" if auto_mode else "false"
+        response = JSONResponse(content={"status": "ok", "auto_mode": auto_mode})
+        logger.info(f"POST /api/mode - 200 auto_mode={auto_mode}")
+        return response
+
     # ================== OAUTH ENDPOINTS ==================
     # Initialize config
     config = Config()
@@ -714,6 +739,77 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             font-size: 3rem;
             margin-bottom: 1rem;
         }
+
+        .mode-toggle-section {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .mode-toggle-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .mode-toggle input[type="checkbox"] {
+            width: 44px;
+            height: 24px;
+            appearance: none;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .mode-toggle input[type="checkbox"]:checked {
+            background: #28a745;
+        }
+
+        .mode-toggle input[type="checkbox"]::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s;
+        }
+
+        .mode-toggle input[type="checkbox"]:checked::after {
+            left: 22px;
+        }
+
+        .mode-status {
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+        }
+
+        .mode-status.auto {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .mode-status.manual {
+            background: #fff3cd;
+            color: #856404;
+        }
     </style>
 </head>
 <body>
@@ -723,6 +819,14 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     </div>
 
     <div class="container">
+        <div class="mode-toggle-section">
+            <span class="mode-toggle-label">Auto Mode:</span>
+            <div class="mode-toggle">
+                <input type="checkbox" id="auto-mode-toggle" onchange="toggleAutoMode(this.checked)">
+                <span class="mode-status manual" id="mode-status-label">Manual</span>
+            </div>
+        </div>
+
         <div class="filters">
             <div class="filter-buttons">
                 <button class="filter-btn active" data-filter="pending_review">Pending Review</button>
@@ -919,6 +1023,42 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             loadResponses();
         }
 
+        // Load and display current auto mode
+        async function loadMode() {
+            try {
+                const response = await fetch('/api/mode');
+                const data = await response.json();
+                const toggle = document.getElementById('auto-mode-toggle');
+                const label = document.getElementById('mode-status-label');
+                if (toggle && label) {
+                    toggle.checked = data.auto_mode;
+                    label.textContent = data.auto_mode ? 'Auto' : 'Manual';
+                    label.className = 'mode-status ' + (data.auto_mode ? 'auto' : 'manual');
+                }
+            } catch (error) {
+                console.error('Error loading mode:', error);
+            }
+        }
+
+        // Toggle auto mode
+        async function toggleAutoMode(enabled) {
+            try {
+                const response = await fetch('/api/mode', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({auto_mode: enabled})
+                });
+                const data = await response.json();
+                const label = document.getElementById('mode-status-label');
+                if (label) {
+                    label.textContent = data.auto_mode ? 'Auto' : 'Manual';
+                    label.className = 'mode-status ' + (data.auto_mode ? 'auto' : 'manual');
+                }
+            } catch (error) {
+                console.error('Error toggling mode:', error);
+            }
+        }
+
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -931,6 +1071,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
         // Initial load
         loadResponses();
+        loadMode();
 
         // Auto-refresh every 5 seconds
         setInterval(loadResponses, 5000);
