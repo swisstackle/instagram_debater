@@ -18,6 +18,8 @@ from src.config import Config
 from src.token_extractor_factory import create_token_extractor
 from src.audit_log_extractor_factory import create_audit_log_extractor
 from src.audit_log_extractor import AuditLogExtractor
+from src.mode_extractor_factory import create_mode_extractor
+from src.mode_extractor import ModeExtractor
 
 # Configure dashboard logger
 logger = logging.getLogger('dashboard')
@@ -54,7 +56,7 @@ def sanitize_log_input(value: str) -> str:
     return sanitized[:200]
 
 
-def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None) -> FastAPI:
+def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None) -> FastAPI:
     """
     Create a dashboard FastAPI application.
 
@@ -63,6 +65,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             Note: This parameter is deprecated for audit log storage. 
             To use a custom state_dir, pass a LocalDiskAuditExtractor instance.
         audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
+        mode_extractor: Optional mode extractor instance (defaults to factory-created)
 
     Returns:
         FastAPI application instance
@@ -72,6 +75,10 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     # Use provided audit log extractor or create one via factory
     if audit_log_extractor is None:
         audit_log_extractor = create_audit_log_extractor()
+
+    # Use provided mode extractor or create one via factory
+    if mode_extractor is None:
+        mode_extractor = create_mode_extractor()
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():
@@ -180,8 +187,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     async def get_mode():
         """Get the current auto mode setting."""
         logger.info("GET /api/mode")
-        value = os.getenv("AUTO_POST_ENABLED", "false").lower()
-        auto_mode = value in ["true", "1", "yes"]
+        auto_mode = mode_extractor.get_auto_mode()
         response = JSONResponse(content={"auto_mode": auto_mode})
         logger.info(f"GET /api/mode - 200 auto_mode={auto_mode}")
         return response
@@ -195,7 +201,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             logger.warning("POST /api/mode - 400 Invalid or missing auto_mode field")
             raise HTTPException(status_code=400, detail="auto_mode field must be a boolean")
         auto_mode = data["auto_mode"]
-        os.environ["AUTO_POST_ENABLED"] = "true" if auto_mode else "false"
+        mode_extractor.set_auto_mode(auto_mode)
         response = JSONResponse(content={"status": "ok", "auto_mode": auto_mode})
         logger.info(f"POST /api/mode - 200 auto_mode={auto_mode}")
         return response

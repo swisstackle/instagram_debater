@@ -9,16 +9,18 @@ import uvicorn
 
 from dashboard import create_dashboard_app
 from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
+from src.local_disk_mode_extractor import LocalDiskModeExtractor
 
 # Create the main test server app
 app = FastAPI()
 
-# Create and mount the dashboard app with test state directory
-dashboard_app = create_dashboard_app(state_dir="test_state")
-
 # ================== STATE MANAGEMENT ==================
 STATE_DIR = "test_state"
 os.makedirs(STATE_DIR, exist_ok=True)
+
+# Create mode extractor and dashboard app with shared test state directory
+_mode_extractor = LocalDiskModeExtractor(state_dir=STATE_DIR)
+dashboard_app = create_dashboard_app(state_dir=STATE_DIR, mode_extractor=_mode_extractor)
 
 def get_audit_log_path():
     """Get path to audit log file."""
@@ -152,6 +154,7 @@ async def reset_test_state():
     # Clear state files
     save_audit_log({"version": "1.0", "entries": []})
     save_pending_comments({"version": "1.0", "comments": []})
+    _mode_extractor.set_auto_mode(False)
     mock_instagram_state["posts"].clear()
     mock_instagram_state["comments"].clear()
     mock_instagram_state["replies"].clear()

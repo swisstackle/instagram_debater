@@ -108,8 +108,13 @@ class Config:
     @property
     def auto_post_enabled(self) -> bool:
         """Check if auto-posting is enabled."""
-        value = os.getenv("AUTO_POST_ENABLED", "false").lower()
-        return value in ["true", "1", "yes"]
+        try:
+            from src.mode_extractor_factory import create_mode_extractor  # pylint: disable=import-outside-toplevel
+            return create_mode_extractor().get_auto_mode()
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Fall back to environment variable if mode storage is unavailable
+            value = os.getenv("AUTO_POST_ENABLED", "false").lower()
+            return value in ["true", "1", "yes"]
 
     @property
     def articles_config(self) -> List[Dict[str, str]]:

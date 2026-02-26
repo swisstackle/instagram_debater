@@ -27,13 +27,23 @@ class TestModeEditorEndpoints:
         shutil.rmtree(temp_dir)
 
     @pytest.fixture
-    def app(self, temp_state_dir):
-        """Create FastAPI app with temporary state directory."""
+    def mode_extractor(self, temp_state_dir):
+        """Create a LocalDiskModeExtractor with a temporary state directory."""
+        from src.local_disk_mode_extractor import LocalDiskModeExtractor
+        return LocalDiskModeExtractor(state_dir=temp_state_dir)
+
+    @pytest.fixture
+    def app(self, temp_state_dir, mode_extractor):
+        """Create FastAPI app with temporary state directory and injected mode extractor."""
         from dashboard import create_dashboard_app
         from src.local_disk_audit_extractor import LocalDiskAuditExtractor
 
         extractor = LocalDiskAuditExtractor(state_dir=temp_state_dir)
-        return create_dashboard_app(state_dir=temp_state_dir, audit_log_extractor=extractor)
+        return create_dashboard_app(
+            state_dir=temp_state_dir,
+            audit_log_extractor=extractor,
+            mode_extractor=mode_extractor,
+        )
 
     def _get_route_endpoint(self, app, path, method="GET"):
         """Helper to find a route endpoint by path and method."""
@@ -55,9 +65,8 @@ class TestModeEditorEndpoints:
         endpoint = self._get_route_endpoint(app, "/api/mode", "POST")
         assert endpoint is not None, "POST /api/mode endpoint should exist"
 
-    def test_get_mode_returns_auto_mode_false_by_default(self, app, monkeypatch):
-        """Test that GET /api/mode returns auto_mode=False when env var not set."""
-        monkeypatch.delenv("AUTO_POST_ENABLED", raising=False)
+    def test_get_mode_returns_auto_mode_false_by_default(self, app):
+        """Test that GET /api/mode returns auto_mode=False when not yet set."""
         endpoint = self._get_route_endpoint(app, "/api/mode", "GET")
         assert endpoint is not None
 
@@ -65,9 +74,9 @@ class TestModeEditorEndpoints:
         data = json.loads(response.body)
         assert data["auto_mode"] is False
 
-    def test_get_mode_returns_auto_mode_true_when_enabled(self, app, monkeypatch):
-        """Test that GET /api/mode returns auto_mode=True when env var is set to true."""
-        monkeypatch.setenv("AUTO_POST_ENABLED", "true")
+    def test_get_mode_returns_auto_mode_true_when_enabled(self, app, mode_extractor):
+        """Test that GET /api/mode returns auto_mode=True when extractor has it enabled."""
+        mode_extractor.set_auto_mode(True)
         endpoint = self._get_route_endpoint(app, "/api/mode", "GET")
         assert endpoint is not None
 
@@ -75,9 +84,8 @@ class TestModeEditorEndpoints:
         data = json.loads(response.body)
         assert data["auto_mode"] is True
 
-    def test_post_mode_enables_auto_mode(self, app, monkeypatch):
+    def test_post_mode_enables_auto_mode(self, app, mode_extractor):
         """Test that POST /api/mode with auto_mode=True enables auto mode."""
-        monkeypatch.delenv("AUTO_POST_ENABLED", raising=False)
         endpoint = self._get_route_endpoint(app, "/api/mode", "POST")
         assert endpoint is not None
 
@@ -92,11 +100,11 @@ class TestModeEditorEndpoints:
         data = json.loads(response.body)
         assert data["status"] == "ok"
         assert data["auto_mode"] is True
-        assert os.environ.get("AUTO_POST_ENABLED") == "true"
+        assert mode_extractor.get_auto_mode() is True
 
-    def test_post_mode_disables_auto_mode(self, app, monkeypatch):
+    def test_post_mode_disables_auto_mode(self, app, mode_extractor):
         """Test that POST /api/mode with auto_mode=False disables auto mode."""
-        monkeypatch.setenv("AUTO_POST_ENABLED", "true")
+        mode_extractor.set_auto_mode(True)
         endpoint = self._get_route_endpoint(app, "/api/mode", "POST")
         assert endpoint is not None
 
@@ -111,7 +119,7 @@ class TestModeEditorEndpoints:
         data = json.loads(response.body)
         assert data["status"] == "ok"
         assert data["auto_mode"] is False
-        assert os.environ.get("AUTO_POST_ENABLED") == "false"
+        assert mode_extractor.get_auto_mode() is False
 
     def test_post_mode_rejects_invalid_input(self, app):
         """Test that POST /api/mode returns 400 for missing or non-boolean auto_mode."""
@@ -131,10 +139,8 @@ class TestModeEditorEndpoints:
             asyncio.run(endpoint(mock_request))
         assert exc_info.value.status_code == 400
 
-    def test_get_mode_reflects_post_mode_change(self, app, monkeypatch):
+    def test_get_mode_reflects_post_mode_change(self, app, mode_extractor):
         """Test that GET /api/mode reflects the change made by POST /api/mode."""
-        monkeypatch.delenv("AUTO_POST_ENABLED", raising=False)
-
         post_endpoint = self._get_route_endpoint(app, "/api/mode", "POST")
         get_endpoint = self._get_route_endpoint(app, "/api/mode", "GET")
         assert post_endpoint is not None
@@ -163,3 +169,4 @@ class TestModeEditorEndpoints:
                 assert "mode-toggle" in html or "auto-mode" in html or "auto_mode" in html, \
                     "Dashboard should include mode toggle element"
                 break
+
