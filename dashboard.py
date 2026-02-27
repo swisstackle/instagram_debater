@@ -1443,6 +1443,9 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         }
 
         // ================== ARTICLE MANAGER ==================
+        // Cache article data by ID to avoid HTML attribute escaping issues
+        let _articleDataMap = {};
+
         async function loadArticles() {
             try {
                 const response = await fetch('/api/articles');
@@ -1456,16 +1459,14 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         function renderArticles(articles) {
             const list = document.getElementById('article-list');
             if (!list) return;
+            _articleDataMap = {};
+            articles.forEach(a => { _articleDataMap[a.id] = a; });
             if (articles.length === 0) {
                 list.innerHTML = '<li style="color:#888;font-size:0.9rem;">No articles yet.</li>';
                 return;
             }
             list.innerHTML = articles.map(article => `
-                <li class="article-item"
-                    data-article-id="${escapeHtml(article.id)}"
-                    data-article-title="${escapeHtml(article.title || '')}"
-                    data-article-link="${escapeHtml(article.link || '')}"
-                    data-article-content="${escapeHtml(article.content || '')}">
+                <li class="article-item" data-article-id="${escapeHtml(article.id)}">
                     <span class="article-item-title">${escapeHtml(article.title)}</span>
                     <span class="article-item-link">${escapeHtml(article.link || '')}</span>
                     <div class="article-item-actions">
@@ -1491,10 +1492,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         function editArticleFromItem(btn) {
             const li = btn.closest('.article-item');
             const id = li.dataset.articleId;
+            const article = _articleDataMap[id] || {};
             document.getElementById('article-form-id').value = id;
-            document.getElementById('article-form-title').value = li.dataset.articleTitle || '';
-            document.getElementById('article-form-link').value = li.dataset.articleLink || '';
-            document.getElementById('article-form-content').value = li.dataset.articleContent || '';
+            document.getElementById('article-form-title').value = article.title || '';
+            document.getElementById('article-form-link').value = article.link || '';
+            document.getElementById('article-form-content').value = article.content || '';
             document.getElementById('article-form').classList.add('active');
         }
 
