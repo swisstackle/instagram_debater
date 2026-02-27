@@ -8,7 +8,7 @@ from src.local_disk_prompt_extractor import LocalDiskPromptExtractor
 from src.tigris_prompt_extractor import TigrisPromptExtractor
 
 
-def create_prompt_extractor() -> PromptExtractor:
+def create_prompt_extractor(state_dir: str = "state") -> PromptExtractor:
     """
     Create a prompt extractor based on environment configuration.
 
@@ -16,6 +16,9 @@ def create_prompt_extractor() -> PromptExtractor:
     which implementation to use:
     - 'local' or unset: LocalDiskPromptExtractor (default)
     - 'tigris': TigrisPromptExtractor
+
+    Args:
+        state_dir: Directory for local disk storage (default: "state")
 
     Returns:
         PromptExtractor: Configured prompt extractor instance
@@ -26,4 +29,4 @@ def create_prompt_extractor() -> PromptExtractor:
         return TigrisPromptExtractor()
     else:
         # Default to local disk storage
-        return LocalDiskPromptExtractor()
+        return LocalDiskPromptExtractor(state_dir=state_dir)

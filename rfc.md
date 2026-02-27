@@ -153,6 +153,15 @@ These constraints are **non-negotiable** and define the architecture:
 │  │  Shared by dashboard, processor, and webhook           │   │
 │  └────────────────────────────────────────────────────────┘   │
 │                                                                │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │        Prompt Storage (PromptExtractor)                │   │
+│  │  ┌──────────────────┐    ┌──────────────────────┐     │   │
+│  │  │LocalDiskPrompt   │    │  TigrisPrompt        │     │   │
+│  │  │Extractor         │    │  Extractor           │     │   │
+│  │  └──────────────────┘    └──────────────────────┘     │   │
+│  │  Configured via PROMPT_STORAGE_TYPE                    │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                │
 │  All storage systems support:                                  │
 │  - local: Uses state/*.json files                             │
 │  - tigris: Uses Tigris object storage on Fly.io               │
@@ -271,6 +280,10 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 - `MODE_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
   - **Use `tigris`** when the dashboard, processor, and webhook run on separate machines so they all share the same auto-post mode setting
 
+*Prompt Storage:*
+- `PROMPT_STORAGE_TYPE` - Storage backend type (`local` or `tigris`, default: `local`)
+  - **Use `tigris`** when running distributed deployments so all process groups share the same custom prompt templates
+
 *Self-Reply Prevention:*
 - `INSTAGRAM_USERNAME` - (Optional) The bot's own Instagram username, used to discard self-replies. This is automatically read from the stored OAuth token when a user logs in via the dashboard; the env var is only a fallback for deployments that do not use the OAuth login flow. If `OAUTH_TOKEN_STORAGE_TYPE=env_var`, you must set `INSTAGRAM_USERNAME` explicitly because the token data does not include a username.
 
@@ -287,6 +300,7 @@ These base classes eliminate code duplication and ensure consistent behavior acr
    - Comments: `state/pending_comments.json`
    - Audit Logs: `state/audit_log.json`
    - Mode: `state/mode.json`
+   - Prompts: `state/prompts.json`
    - Suitable for single-machine deployments
    - Default option, no additional configuration required
 
@@ -294,6 +308,7 @@ These base classes eliminate code duplication and ensure consistent behavior acr
    - Comments: `state/pending_comments.json` (in S3 bucket)
    - Audit Logs: `state/audit_log.json` (in S3 bucket)
    - Mode: `state/mode.json` (in S3 bucket)
+   - Prompts: `state/prompts.json` (in S3 bucket)
    - Suitable for distributed deployments on Fly.io
    - Allows webhook server, dashboard, and processor to run on different machines
    - Requires Tigris bucket creation: `fly storage create`
@@ -321,6 +336,11 @@ These base classes eliminate code duplication and ensure consistent behavior acr
 - `LocalDiskModeExtractor` (extends `BaseLocalDiskExtractor`) - Stores `state/mode.json` on local disk
 - `TigrisModeExtractor` (extends `BaseTigrisExtractor`) - Stores `state/mode.json` in S3-compatible object storage
 - Factory: `create_mode_extractor()` - Creates appropriate extractor based on `MODE_STORAGE_TYPE`
+
+*Prompt Storage:*
+- `LocalDiskPromptExtractor` (extends `BaseLocalDiskExtractor`) - Stores `state/prompts.json` on local disk
+- `TigrisPromptExtractor` (extends `BaseTigrisExtractor`) - Stores `state/prompts.json` in S3-compatible object storage
+- Factory: `create_prompt_extractor()` - Creates appropriate extractor based on `PROMPT_STORAGE_TYPE`
 
 **Token Storage Use Cases:**
 - **`local` (Default):** Single-machine deployments where OAuth tokens are automatically refreshed and persisted to local disk
@@ -894,6 +914,33 @@ Stores articles managed via the Article Manager dashboard. Used by the dashboard
 - Deleted via `ArticleExtractor.delete_article(id)` — returns `False` if ID not found
 - Factory: `create_article_extractor()` selects backend based on `ARTICLE_STORAGE_TYPE` env var
 
+### 9.6 `prompts.json`
+
+Stores custom prompt templates managed via the Prompt Editor dashboard. Used by the dashboard for editing prompts.
+
+**Storage Backends:**
+- **Local**: `state/prompts.json`
+- **Tigris**: `state/prompts.json` (in S3 bucket) — use for distributed deployments; configure via `PROMPT_STORAGE_TYPE=tigris`
+
+**Format:**
+```json
+{
+  "prompts": {
+    "debate_prompt": "You are a debate assistant bot for an Instagram account...",
+    "relevance_prompt": "Is this comment relevant to the article?"
+  }
+}
+```
+
+**Schema:**
+- `prompts` (object, required): Mapping of prompt name to prompt content string
+
+**Access:**
+- Read via `PromptExtractor.get_prompt(name)` — returns empty string when not found
+- Read all via `PromptExtractor.get_all_prompts()` — returns `{}` when no prompts stored
+- Written via `PromptExtractor.set_prompt(name, content)`
+- Factory: `create_prompt_extractor()` selects backend based on `PROMPT_STORAGE_TYPE` env var
+
 ---
 
 ## 10. Token Limit & Truncation Policy
@@ -985,7 +1032,26 @@ All generated responses must pass these checks before being saved or posted:
 
 **Tech Stack:** Simple web UI (FastAPI + inline JavaScript)
 
-### 12.3 Manual Workflows
+### 12.3 Prompt Editor
+
+**Purpose:** Allow humans to view and edit prompt templates from the dashboard without direct filesystem access.
+
+**Features:**
+- List all stored custom prompts
+- Edit any prompt template (name + content) with a multi-line text editor
+- Changes take effect immediately on the next processor run (no redeploy required)
+
+**Prompt Editor API:**
+- `GET /api/prompts` — returns all stored prompts as `{"prompts": {name: content}}`
+- `GET /api/prompts/{name}` — returns a single prompt by name: `{"name": ..., "content": ...}` (content is empty string if not stored)
+- `PUT /api/prompts/{name}` — creates or updates a prompt; body: `{"content": "..."}` (400 if content field missing); returns `{"status": "ok", "name": "..."}`
+
+**Storage:**
+- Backed by `PromptExtractor` — set `PROMPT_STORAGE_TYPE=tigris` for distributed deployments so all process groups share the same prompts
+
+**Tech Stack:** Simple web UI (FastAPI + inline JavaScript)
+
+### 12.4 Manual Workflows
 
 **Daily Review (Recommended):**
 1. Check `audit_log.json` for rejected responses

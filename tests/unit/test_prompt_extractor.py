@@ -166,21 +166,28 @@ class TestTigrisPromptExtractor(BaseTigrisExtractorTests):
 class TestPromptExtractorFactory:
     """Test suite for prompt extractor factory function."""
 
-    def test_factory_returns_local_by_default(self, monkeypatch):
+    def test_factory_returns_local_by_default(self, monkeypatch, tmp_path):
         """Test factory returns LocalDiskPromptExtractor when PROMPT_STORAGE_TYPE not set."""
         monkeypatch.delenv("PROMPT_STORAGE_TYPE", raising=False)
         from src.prompt_extractor_factory import create_prompt_extractor
         from src.local_disk_prompt_extractor import LocalDiskPromptExtractor
-        extractor = create_prompt_extractor()
+        extractor = create_prompt_extractor(state_dir=str(tmp_path))
         assert isinstance(extractor, LocalDiskPromptExtractor)
 
-    def test_factory_returns_local_explicitly(self, monkeypatch):
+    def test_factory_returns_local_explicitly(self, monkeypatch, tmp_path):
         """Test factory returns LocalDiskPromptExtractor when PROMPT_STORAGE_TYPE=local."""
         monkeypatch.setenv("PROMPT_STORAGE_TYPE", "local")
         from src.prompt_extractor_factory import create_prompt_extractor
         from src.local_disk_prompt_extractor import LocalDiskPromptExtractor
-        extractor = create_prompt_extractor()
+        extractor = create_prompt_extractor(state_dir=str(tmp_path))
         assert isinstance(extractor, LocalDiskPromptExtractor)
+
+    def test_factory_uses_custom_state_dir(self, monkeypatch, tmp_path):
+        """Test factory passes state_dir to LocalDiskPromptExtractor."""
+        monkeypatch.delenv("PROMPT_STORAGE_TYPE", raising=False)
+        from src.prompt_extractor_factory import create_prompt_extractor
+        extractor = create_prompt_extractor(state_dir=str(tmp_path))
+        assert extractor.state_dir == str(tmp_path)
 
     def test_factory_returns_tigris(self, monkeypatch):
         """Test factory returns TigrisPromptExtractor when PROMPT_STORAGE_TYPE=tigris."""

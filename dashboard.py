@@ -23,6 +23,8 @@ from src.mode_extractor_factory import create_mode_extractor
 from src.mode_extractor import ModeExtractor
 from src.article_extractor_factory import create_article_extractor
 from src.article_extractor import ArticleExtractor
+from src.prompt_extractor_factory import create_prompt_extractor
+from src.prompt_extractor import PromptExtractor
 
 # Configure dashboard logger
 logger = logging.getLogger('dashboard')
@@ -59,7 +61,7 @@ def sanitize_log_input(value: str) -> str:
     return sanitized[:200]
 
 
-def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None, article_extractor: ArticleExtractor = None) -> FastAPI:
+def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None, article_extractor: ArticleExtractor = None, prompt_extractor: PromptExtractor = None) -> FastAPI:
     """
     Create a dashboard FastAPI application.
 
@@ -69,6 +71,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
         mode_extractor: Optional mode extractor instance (defaults to factory-created)
         article_extractor: Optional article extractor instance (defaults to factory-created)
+        prompt_extractor: Optional prompt extractor instance (defaults to factory-created)
 
     Returns:
         FastAPI application instance
@@ -86,6 +89,10 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     # Use provided article extractor or create one via factory
     if article_extractor is None:
         article_extractor = create_article_extractor(state_dir=state_dir)
+
+    # Use provided prompt extractor or create one via factory
+    if prompt_extractor is None:
+        prompt_extractor = create_prompt_extractor(state_dir=state_dir)
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():
@@ -270,6 +277,41 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             raise HTTPException(status_code=404, detail="Article not found")
         logger.info(f"DELETE /api/articles/{sanitized_id} - 200")
         return JSONResponse(content={"status": "ok", "article_id": article_id})
+
+    # ================== PROMPT EDITOR ENDPOINTS ==================
+    @app.get("/api/prompts")
+    async def get_prompts():
+        """Get all stored prompt templates."""
+        logger.info("GET /api/prompts")
+        prompts = prompt_extractor.get_all_prompts()
+        response = JSONResponse(content={"prompts": prompts})
+        logger.info(f"GET /api/prompts - 200 count={len(prompts)}")
+        return response
+
+    @app.get("/api/prompts/{name}")
+    async def get_prompt(name: str):
+        """Get a single prompt template by name."""
+        sanitized_name = sanitize_log_input(name)
+        logger.info(f"GET /api/prompts/{sanitized_name}")
+        content = prompt_extractor.get_prompt(name)
+        response = JSONResponse(content={"name": name, "content": content})
+        logger.info(f"GET /api/prompts/{sanitized_name} - 200")
+        return response
+
+    @app.put("/api/prompts/{name}")
+    async def set_prompt(name: str, request: Request):
+        """Create or update a prompt template by name."""
+        sanitized_name = sanitize_log_input(name)
+        logger.info(f"PUT /api/prompts/{sanitized_name}")
+        data = await request.json()
+        if "content" not in data:
+            logger.warning(f"PUT /api/prompts/{sanitized_name} - 400 Missing content field")
+            raise HTTPException(status_code=400, detail="content field is required")
+        content = data["content"]
+        prompt_extractor.set_prompt(name, content)
+        response = JSONResponse(content={"status": "ok", "name": name})
+        logger.info(f"PUT /api/prompts/{sanitized_name} - 200")
+        return response
 
     # ================== OAUTH ENDPOINTS ==================
     # Initialize config
@@ -988,6 +1030,99 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             display: block;
             margin-bottom: 0.25rem;
         }
+
+        .prompt-editor-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .prompt-editor-section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .prompt-list {
+            list-style: none;
+            margin-bottom: 1rem;
+        }
+
+        .prompt-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            background: #f8f9fa;
+        }
+
+        .prompt-item-name {
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: #333;
+            flex: 1;
+            font-family: monospace;
+        }
+
+        .prompt-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .prompt-form {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: #f8f9fa;
+            display: none;
+        }
+
+        .prompt-form.active {
+            display: block;
+        }
+
+        .prompt-form input,
+        .prompt-form textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .prompt-form textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+
+        .prompt-form label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #555;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .btn-prompt-save {
+            background: #28a745;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -1022,6 +1157,24 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 <div class="actions">
                     <button class="btn btn-article-save" onclick="submitArticleForm()">Save</button>
                     <button class="btn btn-cancel" onclick="hideArticleForm()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="prompt-editor-section" id="prompt-editor">
+            <h2>✏️ Prompt Editor</h2>
+            <ul class="prompt-list" id="prompt-list">
+                <!-- Prompts will be loaded here -->
+            </ul>
+            <div class="prompt-form" id="prompt-form">
+                <input type="hidden" id="prompt-form-name" value="">
+                <label for="prompt-form-name-display">Prompt Name</label>
+                <input type="text" id="prompt-form-name-display" placeholder="e.g. debate_prompt" readonly>
+                <label for="prompt-form-content">Content</label>
+                <textarea id="prompt-form-content" placeholder="Enter prompt template content..."></textarea>
+                <div class="actions">
+                    <button class="btn btn-prompt-save" onclick="submitPromptForm()">Save</button>
+                    <button class="btn btn-cancel" onclick="hidePromptForm()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -1384,9 +1537,90 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         loadResponses();
         loadMode();
         loadArticles();
+        loadPrompts();
 
         // Auto-refresh every 5 seconds
         setInterval(loadResponses, 5000);
+
+        // ================== PROMPT EDITOR ==================
+        async function loadPrompts() {
+            try {
+                const response = await fetch('/api/prompts');
+                const data = await response.json();
+                renderPrompts(data.prompts);
+            } catch (error) {
+                console.error('Error loading prompts:', error);
+            }
+        }
+
+        function renderPrompts(prompts) {
+            const list = document.getElementById('prompt-list');
+            if (!list) return;
+            const names = Object.keys(prompts);
+            if (names.length === 0) {
+                list.innerHTML = '<li style="color:#888;font-size:0.9rem;">No custom prompts stored. Click a prompt name to edit it.</li>';
+            } else {
+                list.innerHTML = names.map(name => `
+                    <li class="prompt-item" data-prompt-name="${escapeHtml(name)}">
+                        <span class="prompt-item-name">${escapeHtml(name)}</span>
+                        <div class="prompt-item-actions">
+                            <button class="btn btn-edit" onclick="editPromptFromItem(this)">Edit</button>
+                        </div>
+                    </li>
+                `).join('');
+            }
+        }
+
+        function editPromptFromItem(btn) {
+            const li = btn.closest('.prompt-item');
+            const name = li.dataset.promptName;
+            showPromptForm(name);
+        }
+
+        async function showPromptForm(name) {
+            document.getElementById('prompt-form-name').value = name || '';
+            document.getElementById('prompt-form-name-display').value = name || '';
+            document.getElementById('prompt-form-content').value = '';
+            document.getElementById('prompt-form').classList.add('active');
+            if (name) {
+                try {
+                    const response = await fetch(`/api/prompts/${encodeURIComponent(name)}`);
+                    const data = await response.json();
+                    document.getElementById('prompt-form-content').value = data.content || '';
+                } catch (error) {
+                    console.error('Error loading prompt:', error);
+                }
+            }
+        }
+
+        function hidePromptForm() {
+            document.getElementById('prompt-form').classList.remove('active');
+        }
+
+        async function submitPromptForm() {
+            const name = document.getElementById('prompt-form-name').value || document.getElementById('prompt-form-name-display').value;
+            const content = document.getElementById('prompt-form-content').value;
+            if (!name) {
+                alert('Prompt name is required');
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/prompts/${encodeURIComponent(name)}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({content})
+                });
+                if (resp.ok) {
+                    hidePromptForm();
+                    await loadPrompts();
+                } else {
+                    const err = await resp.json();
+                    alert('Error: ' + (err.detail || 'Failed to save prompt'));
+                }
+            } catch (error) {
+                console.error('Error saving prompt:', error);
+            }
+        }
     </script>
 </body>
 </html>
