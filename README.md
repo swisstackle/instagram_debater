@@ -148,8 +148,13 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    pending comments and audit logs.
 
 7. **Article configuration:**
-   - `ARTICLES_CONFIG` - JSON array with article configurations
-   - Each article can specify `is_numbered` (default: true)
+
+   The processor loads articles in this priority order:
+   1. **Article extractor** (`ARTICLE_STORAGE_TYPE`) — the primary source. Articles added via the dashboard are stored here (local disk or Tigris). The processor always checks this first.
+   2. **`ARTICLES_CONFIG`** — a fallback used only when the article extractor returns no articles. Useful for local development or when articles live as plain markdown files on disk.
+
+   `ARTICLES_CONFIG` is a JSON array with article configurations:
+   - Each article can specify `is_numbered` (default: auto-detected from content)
      - `is_numbered: true` - Article uses numbered sections (§X.Y.Z) and requires citations
      - `is_numbered: false` - Article without numbered sections, no citations required
    ```json
@@ -158,6 +163,8 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
      {"path": "articles_unnumbered/article2.md", "link": "https://example.com/article2", "is_numbered": false}
    ]
    ```
+
+   > **Tip:** For distributed/Tigris deployments, manage articles exclusively through the dashboard. Leave `ARTICLES_CONFIG` unset and set `ARTICLE_STORAGE_TYPE=tigris` — the processor will read articles directly from Tigris.
 
 ## Development
 

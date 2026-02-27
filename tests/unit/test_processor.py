@@ -1091,9 +1091,9 @@ More text here.
             }
             mock_extractor.is_token_expired.return_value = False
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "OAuth token is valid" in captured.out
             mock_extractor.is_token_expired.assert_called_once_with(buffer_days=5)
@@ -1101,7 +1101,7 @@ More text here.
     def test_ensure_valid_token_oauth_token_refreshed(self, processor, mock_config, capsys):
         """Test _ensure_valid_token refreshes expiring OAuth token."""
         mock_config.instagram_app_secret = "test_secret"
-        
+
         with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
             mock_extractor = MagicMock()
             mock_extractor.get_token.return_value = {
@@ -1111,9 +1111,9 @@ More text here.
             mock_extractor.is_token_expired.return_value = True
             mock_extractor.refresh_token.return_value = True
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "Token expiring soon" in captured.out
             assert "Token refreshed successfully" in captured.out
@@ -1122,7 +1122,7 @@ More text here.
     def test_ensure_valid_token_refresh_fails(self, processor, mock_config, capsys):
         """Test _ensure_valid_token when token refresh fails."""
         mock_config.instagram_app_secret = "test_secret"
-        
+
         with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
             mock_extractor = MagicMock()
             mock_extractor.get_token.return_value = {
@@ -1132,9 +1132,9 @@ More text here.
             mock_extractor.is_token_expired.return_value = True
             mock_extractor.refresh_token.return_value = False
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "Token refresh failed" in captured.out
 
@@ -1144,9 +1144,9 @@ More text here.
             mock_extractor = MagicMock()
             mock_extractor.get_token.return_value = None
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "No OAuth token found" in captured.out
 
@@ -1154,9 +1154,9 @@ More text here.
         """Test _ensure_valid_token handles exceptions gracefully."""
         with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
             mock_factory.side_effect = Exception("Token extractor error")
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "Token validation warning" in captured.out
 
@@ -1165,7 +1165,7 @@ More text here.
         with patch.object(processor, '_ensure_valid_token') as mock_token_check:
             with patch.object(processor.audit_log_extractor, 'load_entries', return_value=[]):
                 processor.post_approved_responses()
-                
+
                 # Should call token validation before posting
                 mock_token_check.assert_called_once()
 
@@ -1388,3 +1388,226 @@ Exercise helps with weight management and reduces disease risk.
         assert result["status"] in ["approved", "pending_review"]
         # Citations should be empty for unnumbered articles (no citations in generated response)
         assert result["citations_used"] == []
+
+
+class TestCommentProcessorArticleExtractor:
+    """Tests for CommentProcessor article extractor integration."""
+
+    @pytest.fixture
+    def mock_instagram_api(self):
+        mock_api = Mock()
+        mock_api.get_post_caption.return_value = "Test post caption"
+        mock_api.get_comment_replies.return_value = []
+        mock_api.post_reply.return_value = {"id": "reply_123"}
+        return mock_api
+
+    @pytest.fixture
+    def mock_llm_client(self):
+        mock_llm = Mock()
+        mock_llm.check_post_topic_relevance.return_value = True
+        mock_llm.check_comment_relevance.return_value = True
+        mock_llm.check_topic_relevance.return_value = True
+        mock_llm.load_template.return_value = "Template: {TOPIC} {FULL_ARTICLE_TEXT} {POST_CAPTION} {USERNAME} {COMMENT_TEXT} {THREAD_CONTEXT}"
+        mock_llm.fill_template.return_value = "Filled template"
+        mock_llm.generate_response.return_value = "Generated response with §1.1 citation"
+        return mock_llm
+
+    @pytest.fixture
+    def mock_validator(self):
+        mock_val = Mock()
+        mock_val.validate_response.return_value = (True, [])
+        mock_val.extract_citations.return_value = ["§1.1"]
+        return mock_val
+
+    @pytest.fixture
+    def mock_config(self):
+        mock_cfg = Mock()
+        mock_cfg.auto_post_enabled = False
+        mock_cfg.instagram_username = ""
+        mock_cfg.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
+        return mock_cfg
+
+    @pytest.fixture
+    def mock_article_extractor(self):
+        ext = Mock()
+        ext.get_articles.return_value = []
+        return ext
+
+    @pytest.fixture
+    def processor(self, mock_instagram_api, mock_llm_client, mock_validator, mock_config, mock_article_extractor):
+        return CommentProcessor(
+            mock_instagram_api,
+            mock_llm_client,
+            mock_validator,
+            mock_config,
+            article_extractor=mock_article_extractor,
+        )
+
+    @pytest.fixture
+    def sample_comment(self):
+        return {
+            "comment_id": "comment_123",
+            "post_id": "post_456",
+            "username": "testuser",
+            "text": "What do you think about this topic?",
+        }
+
+    @pytest.fixture
+    def sample_article(self):
+        return "# Test Article\n\n## §1. Introduction\n\n### §1.1 Overview\n\nThis is a test article.\n"
+
+    def test_processor_initialization_with_article_extractor(
+        self, mock_instagram_api, mock_llm_client, mock_validator, mock_config, mock_article_extractor
+    ):
+        """Test that processor accepts and stores a custom article extractor."""
+        p = CommentProcessor(
+            mock_instagram_api,
+            mock_llm_client,
+            mock_validator,
+            mock_config,
+            article_extractor=mock_article_extractor,
+        )
+
+        assert p.article_extractor is mock_article_extractor
+
+    def test_articles_from_extractor_converts_correctly(self, processor):
+        """Test that _articles_from_extractor converts extractor dicts to processor format."""
+        extractor_articles = [
+            {
+                "id": "art1",
+                "title": "Article One",
+                "content": "# Article One\n\nFirst paragraph.",
+                "link": "https://example.com/1",
+            },
+            {
+                "id": "art2",
+                "title": "Article Two",
+                "content": "# Article Two\n\nSecond paragraph.",
+                "link": "https://example.com/2",
+            },
+        ]
+
+        articles = processor._articles_from_extractor(extractor_articles)
+
+        assert len(articles) == 2
+        assert articles[0]["path"] == "art1"
+        assert articles[0]["link"] == "https://example.com/1"
+        assert articles[0]["content"] == extractor_articles[0]["content"]
+        assert articles[0]["title"] == "Article One"
+        assert articles[0]["summary"] == "First paragraph."
+        assert articles[0]["is_numbered"] is False  # content has no § markers
+        assert articles[1]["path"] == "art2"
+        assert articles[1]["title"] == "Article Two"
+
+    def test_articles_from_extractor_detects_unnumbered_content(self, processor):
+        """Test that _articles_from_extractor sets is_numbered=False for content without § markers."""
+        extractor_articles = [
+            {
+                "id": "art1",
+                "title": "Plain Article",
+                "content": "# Plain Article\n\nNo numbered sections here.",
+                "link": "https://example.com/1",
+            }
+        ]
+
+        articles = processor._articles_from_extractor(extractor_articles)
+
+        assert articles[0]["is_numbered"] is False
+
+    def test_articles_from_extractor_detects_numbered_content(self, processor):
+        """Test that _articles_from_extractor sets is_numbered=True when § markers are present."""
+        extractor_articles = [
+            {
+                "id": "art1",
+                "title": "Numbered Article",
+                "content": "# Numbered Article\n\n## §1. Section\n\nContent.",
+                "link": "https://example.com/1",
+            }
+        ]
+
+        articles = processor._articles_from_extractor(extractor_articles)
+
+        assert articles[0]["is_numbered"] is True
+
+    def test_articles_from_extractor_uses_stored_title_when_no_markdown_heading(self, processor):
+        """Test that _articles_from_extractor falls back to stored title when content has no # heading."""
+        extractor_articles = [
+            {
+                "id": "art1",
+                "title": "Stored Title",
+                "content": "No heading here, just plain text.",
+                "link": "https://example.com/1",
+            }
+        ]
+
+        articles = processor._articles_from_extractor(extractor_articles)
+
+        assert articles[0]["title"] == "Stored Title"
+
+    def test_run_prefers_extractor_articles_over_articles_config(
+        self, mock_article_extractor, processor, mock_config, sample_comment, capsys
+    ):
+        """Test that the article extractor is used instead of ARTICLES_CONFIG when it has articles."""
+        mock_article_extractor.get_articles.return_value = [
+            {
+                "id": "tigris_art1",
+                "title": "Tigris Article",
+                "content": "# Tigris Article\n\nContent from Tigris.",
+                "link": "https://example.com/tigris",
+            }
+        ]
+        # articles_config is also set – extractor should win
+        mock_config.articles_config = [{"path": "articles/local.md", "link": "https://example.com/local"}]
+
+        with patch.object(processor, 'load_pending_comments', return_value=[sample_comment]):
+            with patch.object(processor, 'process_comment_multi_article', return_value={
+                "comment_id": "comment_123",
+                "status": "pending_review",
+                "article_used": {"path": "tigris_art1", "link": "https://example.com/tigris", "title": "Tigris Article"},
+            }) as mock_process:
+                with patch.object(processor, 'save_audit_log'):
+                    with patch.object(processor, 'post_approved_responses'):
+                        with patch.object(processor, 'clear_pending_comments'):
+                            processor.run()
+
+        mock_article_extractor.get_articles.assert_called_once()
+        mock_process.assert_called_once()
+        captured = capsys.readouterr()
+        assert "article storage" in captured.out
+
+    def test_run_falls_back_to_articles_config_when_extractor_empty(
+        self, mock_article_extractor, processor, mock_config, sample_comment, sample_article, capsys
+    ):
+        """Test that ARTICLES_CONFIG is used when the article extractor returns no articles."""
+        mock_article_extractor.get_articles.return_value = []
+        mock_config.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
+
+        with patch.object(processor, 'load_article', return_value=sample_article) as mock_load:
+            with patch.object(processor, 'load_pending_comments', return_value=[sample_comment]):
+                with patch.object(processor, 'process_comment', return_value={
+                    "comment_id": "comment_123",
+                    "status": "pending_review",
+                }) as mock_process:
+                    with patch.object(processor, 'save_audit_log'):
+                        with patch.object(processor, 'post_approved_responses'):
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+
+        mock_process.assert_called_once()
+        mock_load.assert_called_once_with("articles/test.md")
+
+    def test_run_no_articles_anywhere_prints_message(
+        self, mock_article_extractor, processor, mock_config, sample_comment, capsys
+    ):
+        """Test that a clear message is printed when extractor and ARTICLES_CONFIG are both empty."""
+        mock_article_extractor.get_articles.return_value = []
+        mock_config.articles_config = []
+
+        with patch.object(processor, 'load_pending_comments', return_value=[sample_comment]):
+            with patch.object(processor, 'post_approved_responses'):
+                with patch.object(processor, 'clear_pending_comments') as mock_clear:
+                    processor.run()
+
+        captured = capsys.readouterr()
+        assert "No articles configured" in captured.out
+        mock_clear.assert_not_called()
