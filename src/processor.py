@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from src.article_extractor import ArticleExtractor
 from src.comment_extractor import CommentExtractor
 from src.audit_log_extractor import AuditLogExtractor
+from src.prompt_extractor import PromptExtractor
 from src.file_utils import load_json_file, save_json_file
 from src.validator import ResponseValidator
 
@@ -17,7 +18,7 @@ from src.validator import ResponseValidator
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
 
-    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None, article_extractor: ArticleExtractor = None):
+    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None, article_extractor: ArticleExtractor = None, prompt_extractor: Optional[PromptExtractor] = None):
         """
         Initialize comment processor.
 
@@ -29,6 +30,8 @@ class CommentProcessor:
             comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
             audit_log_extractor: AuditLogExtractor instance (optional, defaults to factory-created)
             article_extractor: ArticleExtractor instance (optional, defaults to factory-created)
+            prompt_extractor: PromptExtractor instance (optional, defaults to factory-created).
+                When provided, it is also wired into the llm_client for runtime-editable templates.
         """
         self.instagram_api = instagram_api
         self.llm_client = llm_client
@@ -52,6 +55,13 @@ class CommentProcessor:
             from src.article_extractor_factory import create_article_extractor
             article_extractor = create_article_extractor()
         self.article_extractor = article_extractor
+
+        # Use provided prompt extractor or create one via factory; wire into llm_client
+        if prompt_extractor is None:
+            from src.prompt_extractor_factory import create_prompt_extractor
+            prompt_extractor = create_prompt_extractor()
+        self.prompt_extractor = prompt_extractor
+        self.llm_client.prompt_extractor = prompt_extractor
 
     def load_article(self, article_path: str) -> str:
         """

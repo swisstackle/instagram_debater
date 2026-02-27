@@ -34,6 +34,10 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 │   ├── local_disk_token_extractor.py # Local disk OAuth token storage (implements token_extractor)
 │   ├── tigris_token_extractor.py    # Tigris/S3 OAuth token storage (implements token_extractor)
 │   ├── env_var_token_extractor.py   # Environment variable token storage (implements token_extractor)
+│   ├── prompt_extractor.py          # Abstract prompt extractor interface
+│   ├── prompt_extractor_factory.py  # Factory for creating prompt extractors
+│   ├── local_disk_prompt_extractor.py # Local disk prompt storage (implements prompt_extractor)
+│   ├── tigris_prompt_extractor.py   # Tigris/S3 prompt storage (implements prompt_extractor)
 │   ├── mode_extractor.py            # Abstract mode extractor interface
 │   ├── mode_extractor_factory.py    # Factory for creating mode extractors
 │   ├── local_disk_mode_extractor.py # Local disk auto-post mode storage (implements mode_extractor)
@@ -128,6 +132,11 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `ARTICLE_STORAGE_TYPE` - Storage backend for managed articles (`local` or `tigris`, default: `local`)
      - `local` - Stores articles in `state/articles.json` on local disk
      - `tigris` - Stores articles in Tigris object storage (`state/articles.json` in S3 bucket); use this for distributed deployments so all components share the same articles
+   
+   **Prompt storage:**
+   - `PROMPT_STORAGE_TYPE` - Storage backend for custom prompt templates (`local` or `tigris`, default: `local`)
+     - `local` - Stores prompts in `state/prompts.json` on local disk
+     - `tigris` - Stores prompts in Tigris object storage (`state/prompts.json` in S3 bucket); use this for distributed deployments so all components share the same prompts
    
    **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris` or `AUDIT_LOG_STORAGE_TYPE=tigris`):**
    - `AWS_ACCESS_KEY_ID` - Tigris access key ID
@@ -279,7 +288,15 @@ pytest --cov=src tests/
    - **Tigris Article Extractor** (`tigris_article_extractor.py`) - Stores articles in Tigris object storage (extends `BaseTigrisExtractor`)
    - **Factory** (`article_extractor_factory.py`) - Creates appropriate extractor based on `ARTICLE_STORAGE_TYPE`
 
-10. **Dashboard** (`dashboard.py`)
+10. **Prompt Extractor** (modular interface)
+   - **Abstract Interface** (`prompt_extractor.py`) - Defines the contract for prompt storage (`get_prompt`, `set_prompt`, `get_all_prompts`)
+   - **Local Disk Prompt Extractor** (`local_disk_prompt_extractor.py`) - Stores prompts in `state/prompts.json` (extends `BaseLocalDiskExtractor`)
+   - **Tigris Prompt Extractor** (`tigris_prompt_extractor.py`) - Stores prompts in Tigris object storage (extends `BaseTigrisExtractor`)
+   - **Factory** (`prompt_extractor_factory.py`) - Creates appropriate extractor based on `PROMPT_STORAGE_TYPE`
+
+   Enables all distributed components (dashboard, processor) to share the same custom prompt templates.
+
+11. **Dashboard** (`dashboard.py`)
    - Web interface for reviewing responses
    - OAuth login/logout functionality
    - Displays authentication status
@@ -287,6 +304,7 @@ pytest --cov=src tests/
    - Uses audit log extractor for reading/updating responses
    - **Auto-post mode toggle** — switches between Auto and Manual modes; reads/writes via mode extractor so the change is immediately visible to the processor on any machine
    - **Article Manager** — create, edit, and delete articles via the dashboard UI; backed by the pluggable article extractor
+   - **Prompt Editor** — view and edit prompt templates via the dashboard UI; backed by the pluggable prompt extractor; custom prompts override the file-based defaults
 
 ## Design Principles
 
@@ -318,6 +336,11 @@ pytest --cov=src tests/
 **Mode:**
 - `GET /api/mode` — returns `{"auto_mode": bool}`
 - `POST /api/mode` — sets the auto-post mode; body: `{"auto_mode": true|false}`
+
+**Prompts:**
+- `GET /api/prompts` — list all stored prompt templates as `{"prompts": {name: content}}`
+- `GET /api/prompts/{name}` — get a single prompt by name; returns `{"name": ..., "content": ...}`
+- `PUT /api/prompts/{name}` — create or update a prompt; body: `{"content": "..."}`
 
 **Articles:**
 - `GET /api/articles` — list all managed articles
