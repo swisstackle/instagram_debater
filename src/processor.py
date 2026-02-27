@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from src.article_extractor import ArticleExtractor
 from src.comment_extractor import CommentExtractor
 from src.audit_log_extractor import AuditLogExtractor
 from src.file_utils import load_json_file, save_json_file
@@ -16,7 +17,7 @@ from src.validator import ResponseValidator
 class CommentProcessor:
     """Main processing loop for handling pending comments."""
 
-    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None):
+    def __init__(self, instagram_api, llm_client, validator, config, comment_extractor: CommentExtractor = None, audit_log_extractor: AuditLogExtractor = None, article_extractor: ArticleExtractor = None):
         """
         Initialize comment processor.
 
@@ -27,6 +28,7 @@ class CommentProcessor:
             config: Config instance
             comment_extractor: CommentExtractor instance (optional, defaults to factory-created)
             audit_log_extractor: AuditLogExtractor instance (optional, defaults to factory-created)
+            article_extractor: ArticleExtractor instance (optional, defaults to factory-created)
         """
         self.instagram_api = instagram_api
         self.llm_client = llm_client
@@ -44,6 +46,12 @@ class CommentProcessor:
             from src.audit_log_extractor_factory import create_audit_log_extractor
             audit_log_extractor = create_audit_log_extractor()
         self.audit_log_extractor = audit_log_extractor
+
+        # Use provided article extractor or create one via factory
+        if article_extractor is None:
+            from src.article_extractor_factory import create_article_extractor
+            article_extractor = create_article_extractor()
+        self.article_extractor = article_extractor
 
     def load_article(self, article_path: str) -> str:
         """
@@ -539,10 +547,38 @@ class CommentProcessor:
         """Clear processed comments from pending list using the configured extractor."""
         self.comment_extractor.clear_pending_comments()
 
+    def _articles_from_extractor(self, extractor_articles: List[Dict]) -> List[Dict[str, Any]]:
+        """
+        Convert article extractor dicts to the format expected by the processor.
+
+        Args:
+            extractor_articles: List of article dicts from ArticleExtractor.get_articles()
+
+        Returns:
+            List of article dicts with content, title, summary, link, path, and is_numbered keys
+        """
+        articles = []
+        for ext_article in extractor_articles:
+            content = ext_article.get("content", "")
+            metadata = self.parse_article_metadata(content)
+            articles.append({
+                "path": ext_article.get("id", ""),
+                "link": ext_article.get("link", ""),
+                "content": content,
+                "title": metadata["title"] or ext_article.get("title", ""),
+                "summary": metadata["summary"],
+                "is_numbered": "§" in content,
+            })
+        return articles
+
     def run(self) -> None:
         """Main processing loop entry point."""
-        # Check if multi-article mode is enabled
-        articles_config = self.config.articles_config
+        # Prefer articles from the article extractor; fall back to ARTICLES_CONFIG
+        extractor_articles = self.article_extractor.get_articles()
+        if extractor_articles:
+            articles_config = []  # extractor takes priority
+        else:
+            articles_config = self.config.articles_config
 
         # Load pending comments
         comments = self.load_pending_comments()
@@ -565,7 +601,25 @@ class CommentProcessor:
             comments_processed = False
 
             # Multi-article or single-article mode
-            if len(articles_config) > 1:
+            if extractor_articles:
+                # Articles from extractor (Tigris or local disk article storage)
+                articles = self._articles_from_extractor(extractor_articles)
+                print(f"Running in multi-article mode with {len(articles)} article(s) from article storage")
+
+                for comment in comments:
+                    print(f"Processing comment {comment.get('comment_id')}...")
+                    result = self.process_comment_multi_article(comment, articles)
+
+                    if result:
+                        self.save_audit_log(result)
+                        article_title = result.get("article_used", {}).get("title", "unknown")
+                        status = result.get('status')
+                        print(f"  - Generated response using '{article_title}', status: {status}")
+                    else:
+                        print("  - Skipped (not relevant)")
+
+                comments_processed = True
+            elif len(articles_config) > 1:
                 # Multi-article mode
                 print(f"Running in multi-article mode with {len(articles_config)} articles")
                 articles = self.load_articles(articles_config)

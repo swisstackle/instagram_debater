@@ -215,7 +215,12 @@ These constraints are **non-negotiable** and define the architecture:
 
 ### 5.3 Article Configuration
 
-Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON array:
+The processor resolves articles in this priority order:
+
+1. **Article extractor** (`ARTICLE_STORAGE_TYPE`, primary source) — the processor calls `ArticleExtractor.get_articles()` first. Articles managed through the dashboard (local disk or Tigris) are returned here. When this returns one or more articles, `ARTICLES_CONFIG` is ignored entirely.
+2. **`ARTICLES_CONFIG`** (fallback) — consulted only when the article extractor returns an empty list. Useful for local development or environments where articles exist as plain markdown files on disk.
+
+`ARTICLES_CONFIG` is a JSON array with article configurations:
 
 ```json
 [
@@ -232,9 +237,13 @@ Articles are configured via the `ARTICLES_CONFIG` environment variable as a JSON
 ]
 ```
 
-- **is_numbered** (optional, default: true): 
+- **is_numbered** (optional):
+  - When loading from `ARTICLES_CONFIG`: defaults to `true` if omitted.
+  - When loading from the article extractor: auto-detected from content (presence of `§` markers).
   - `true` - Article uses numbered sections (§X.Y.Z), responses include citations
   - `false` - Article without numbered sections, responses reference content naturally
+
+> **For Tigris/distributed deployments:** set `ARTICLE_STORAGE_TYPE=tigris` and manage all articles via the dashboard. Leave `ARTICLES_CONFIG` unset — the processor will read articles directly from Tigris and ignore the fallback path.
 
 ### 5.4 Storage Configuration
 
@@ -972,6 +981,7 @@ All generated responses must pass these checks before being saved or posted:
 
 **Storage:**
 - Backed by `ArticleExtractor` — set `ARTICLE_STORAGE_TYPE=tigris` for distributed deployments so all process groups (dashboard, processor) share the same article data
+- The processor always consults the article extractor **first**; `ARTICLES_CONFIG` is only used as a fallback when the extractor returns no articles
 
 **Tech Stack:** Simple web UI (FastAPI + inline JavaScript)
 
