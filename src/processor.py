@@ -495,7 +495,6 @@ class CommentProcessor:
         AUTO_POST_ENABLED setting. This allows manually approved responses from the
         dashboard to be posted by the processor.
         """
-        
         entries = self.audit_log_extractor.load_entries()
         print(f"Found {len(entries)} approved responses to post")
         for entry in entries:

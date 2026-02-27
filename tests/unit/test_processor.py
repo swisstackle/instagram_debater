@@ -1091,9 +1091,9 @@ More text here.
             }
             mock_extractor.is_token_expired.return_value = False
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "OAuth token is valid" in captured.out
             mock_extractor.is_token_expired.assert_called_once_with(buffer_days=5)
@@ -1101,7 +1101,7 @@ More text here.
     def test_ensure_valid_token_oauth_token_refreshed(self, processor, mock_config, capsys):
         """Test _ensure_valid_token refreshes expiring OAuth token."""
         mock_config.instagram_app_secret = "test_secret"
-        
+
         with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
             mock_extractor = MagicMock()
             mock_extractor.get_token.return_value = {
@@ -1111,9 +1111,9 @@ More text here.
             mock_extractor.is_token_expired.return_value = True
             mock_extractor.refresh_token.return_value = True
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "Token expiring soon" in captured.out
             assert "Token refreshed successfully" in captured.out
@@ -1122,7 +1122,7 @@ More text here.
     def test_ensure_valid_token_refresh_fails(self, processor, mock_config, capsys):
         """Test _ensure_valid_token when token refresh fails."""
         mock_config.instagram_app_secret = "test_secret"
-        
+
         with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
             mock_extractor = MagicMock()
             mock_extractor.get_token.return_value = {
@@ -1132,9 +1132,9 @@ More text here.
             mock_extractor.is_token_expired.return_value = True
             mock_extractor.refresh_token.return_value = False
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "Token refresh failed" in captured.out
 
@@ -1144,9 +1144,9 @@ More text here.
             mock_extractor = MagicMock()
             mock_extractor.get_token.return_value = None
             mock_factory.return_value = mock_extractor
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "No OAuth token found" in captured.out
 
@@ -1154,9 +1154,9 @@ More text here.
         """Test _ensure_valid_token handles exceptions gracefully."""
         with patch('src.token_extractor_factory.create_token_extractor') as mock_factory:
             mock_factory.side_effect = Exception("Token extractor error")
-            
+
             processor._ensure_valid_token()
-            
+
             captured = capsys.readouterr()
             assert "Token validation warning" in captured.out
 
@@ -1165,7 +1165,7 @@ More text here.
         with patch.object(processor, '_ensure_valid_token') as mock_token_check:
             with patch.object(processor.audit_log_extractor, 'load_entries', return_value=[]):
                 processor.post_approved_responses()
-                
+
                 # Should call token validation before posting
                 mock_token_check.assert_called_once()
 
@@ -1495,7 +1495,7 @@ class TestCommentProcessorArticleExtractor:
         assert articles[0]["content"] == extractor_articles[0]["content"]
         assert articles[0]["title"] == "Article One"
         assert articles[0]["summary"] == "First paragraph."
-        assert articles[0]["is_numbered"] is True
+        assert articles[0]["is_numbered"] is False  # content has no § markers
         assert articles[1]["path"] == "art2"
         assert articles[1]["title"] == "Article Two"
 
