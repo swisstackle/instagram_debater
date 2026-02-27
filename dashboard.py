@@ -20,6 +20,8 @@ from src.audit_log_extractor_factory import create_audit_log_extractor
 from src.audit_log_extractor import AuditLogExtractor
 from src.mode_extractor_factory import create_mode_extractor
 from src.mode_extractor import ModeExtractor
+from src.article_extractor_factory import create_article_extractor
+from src.article_extractor import ArticleExtractor
 
 # Configure dashboard logger
 logger = logging.getLogger('dashboard')
@@ -56,7 +58,7 @@ def sanitize_log_input(value: str) -> str:
     return sanitized[:200]
 
 
-def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None) -> FastAPI:
+def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None, article_extractor: ArticleExtractor = None) -> FastAPI:
     """
     Create a dashboard FastAPI application.
 
@@ -65,6 +67,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             Used when no audit_log_extractor is provided and storage type is local disk.
         audit_log_extractor: Optional audit log extractor instance (defaults to factory-created)
         mode_extractor: Optional mode extractor instance (defaults to factory-created)
+        article_extractor: Optional article extractor instance (defaults to factory-created)
 
     Returns:
         FastAPI application instance
@@ -78,6 +81,10 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     # Use provided mode extractor or create one via factory
     if mode_extractor is None:
         mode_extractor = create_mode_extractor()
+
+    # Use provided article extractor or create one via factory
+    if article_extractor is None:
+        article_extractor = create_article_extractor(state_dir=state_dir)
 
     # ================== STATE MANAGEMENT ==================
     def load_audit_log():
@@ -204,6 +211,65 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         response = JSONResponse(content={"status": "ok", "auto_mode": auto_mode})
         logger.info(f"POST /api/mode - 200 auto_mode={auto_mode}")
         return response
+
+    # ================== ARTICLE MANAGER ENDPOINTS ==================
+    @app.get("/api/articles")
+    async def get_articles():
+        """Get all articles."""
+        logger.info("GET /api/articles")
+        articles = article_extractor.get_articles()
+        response = JSONResponse(content={"articles": articles})
+        logger.info(f"GET /api/articles - 200 count={len(articles)}")
+        return response
+
+    @app.post("/api/articles")
+    async def create_article(request: Request):
+        """Create a new article."""
+        import uuid  # pylint: disable=import-outside-toplevel
+        logger.info("POST /api/articles")
+        data = await request.json()
+        title = data.get("title", "").strip()
+        content = data.get("content", "").strip()
+        link = data.get("link", "").strip()
+        if not title:
+            logger.warning("POST /api/articles - 400 Missing title")
+            raise HTTPException(status_code=400, detail="title field is required")
+        if not content:
+            logger.warning("POST /api/articles - 400 Missing content")
+            raise HTTPException(status_code=400, detail="content field is required")
+        article_id = str(uuid.uuid4())
+        article_extractor.save_article(article_id, title, content, link)
+        logger.info(f"POST /api/articles - 200 article_id={article_id}")
+        return JSONResponse(content={"status": "ok", "article_id": article_id})
+
+    @app.put("/api/articles/{article_id}")
+    async def update_article(article_id: str, request: Request):
+        """Update an existing article."""
+        sanitized_id = sanitize_log_input(article_id)
+        logger.info(f"PUT /api/articles/{sanitized_id}")
+        existing = article_extractor.get_article(article_id)
+        if existing is None:
+            logger.warning(f"PUT /api/articles/{sanitized_id} - 404 Article not found")
+            raise HTTPException(status_code=404, detail="Article not found")
+        data = await request.json()
+        title = data.get("title", existing.get("title", "")).strip()
+        content = data.get("content", existing.get("content", "")).strip()
+        link = data.get("link", existing.get("link", "")).strip()
+        article_extractor.save_article(article_id, title, content, link)
+        logger.info(f"PUT /api/articles/{sanitized_id} - 200")
+        return JSONResponse(content={"status": "ok", "article_id": article_id})
+
+    @app.delete("/api/articles/{article_id}")
+    async def delete_article(article_id: str):
+        """Delete an article."""
+        sanitized_id = sanitize_log_input(article_id)
+        logger.info(f"DELETE /api/articles/{sanitized_id}")
+        deleted = article_extractor.delete_article(article_id)
+        if not deleted:
+            logger.warning(f"DELETE /api/articles/{sanitized_id} - 404 Article not found")
+            raise HTTPException(status_code=404, detail="Article not found")
+        logger.info(f"DELETE /api/articles/{sanitized_id} - 200")
+        return JSONResponse(content={"status": "ok", "article_id": article_id})
 
     # ================== OAUTH ENDPOINTS ==================
     # Initialize config
@@ -815,6 +881,108 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             background: #fff3cd;
             color: #856404;
         }
+
+        .article-manager-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .article-manager-section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .article-list {
+            list-style: none;
+            margin-bottom: 1rem;
+        }
+
+        .article-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            background: #f8f9fa;
+        }
+
+        .article-item-title {
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: #333;
+            flex: 1;
+        }
+
+        .article-item-link {
+            font-size: 0.8rem;
+            color: #666;
+            margin-left: 1rem;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .article-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .btn-add-article {
+            background: #28a745;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .article-form {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: #f8f9fa;
+            display: none;
+        }
+
+        .article-form.active {
+            display: block;
+        }
+
+        .article-form input,
+        .article-form textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .article-form textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .article-form label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #555;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
     </style>
 </head>
 <body>
@@ -829,6 +997,27 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             <div class="mode-toggle">
                 <input type="checkbox" id="auto-mode-toggle" onchange="toggleAutoMode(this.checked)">
                 <span class="mode-status manual" id="mode-status-label">Manual</span>
+            </div>
+        </div>
+
+        <div class="article-manager-section" id="article-manager">
+            <h2>📄 Article Manager</h2>
+            <ul class="article-list" id="article-list">
+                <!-- Articles will be loaded here -->
+            </ul>
+            <button class="btn btn-add-article" onclick="showAddArticleForm()">+ Add Article</button>
+            <div class="article-form" id="article-form">
+                <input type="hidden" id="article-form-id" value="">
+                <label for="article-form-title">Title</label>
+                <input type="text" id="article-form-title" placeholder="Article title">
+                <label for="article-form-link">Link (URL)</label>
+                <input type="text" id="article-form-link" placeholder="https://example.com/article">
+                <label for="article-form-content">Content (Markdown)</label>
+                <textarea id="article-form-content" placeholder="# Article content..."></textarea>
+                <div class="actions">
+                    <button class="btn btn-save" onclick="submitArticleForm()">Save</button>
+                    <button class="btn btn-cancel" onclick="hideArticleForm()">Cancel</button>
+                </div>
             </div>
         </div>
 
@@ -1071,6 +1260,100 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             }
         }
 
+        // ================== ARTICLE MANAGER ==================
+        async function loadArticles() {
+            try {
+                const response = await fetch('/api/articles');
+                const data = await response.json();
+                renderArticles(data.articles);
+            } catch (error) {
+                console.error('Error loading articles:', error);
+            }
+        }
+
+        function renderArticles(articles) {
+            const list = document.getElementById('article-list');
+            if (!list) return;
+            if (articles.length === 0) {
+                list.innerHTML = '<li style="color:#888;font-size:0.9rem;">No articles yet.</li>';
+                return;
+            }
+            list.innerHTML = articles.map(article => `
+                <li class="article-item" data-article-id="${article.id}">
+                    <span class="article-item-title">${escapeHtml(article.title)}</span>
+                    <span class="article-item-link">${escapeHtml(article.link || '')}</span>
+                    <div class="article-item-actions">
+                        <button class="btn btn-edit" onclick="editArticle('${article.id}', ${JSON.stringify(article).replace(/</g,'&lt;')})">Edit</button>
+                        <button class="btn btn-reject" onclick="deleteArticle('${article.id}')">Delete</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function showAddArticleForm() {
+            document.getElementById('article-form-id').value = '';
+            document.getElementById('article-form-title').value = '';
+            document.getElementById('article-form-link').value = '';
+            document.getElementById('article-form-content').value = '';
+            document.getElementById('article-form').classList.add('active');
+        }
+
+        function hideArticleForm() {
+            document.getElementById('article-form').classList.remove('active');
+        }
+
+        function editArticle(id, article) {
+            document.getElementById('article-form-id').value = id;
+            document.getElementById('article-form-title').value = article.title || '';
+            document.getElementById('article-form-link').value = article.link || '';
+            document.getElementById('article-form-content').value = article.content || '';
+            document.getElementById('article-form').classList.add('active');
+        }
+
+        async function submitArticleForm() {
+            const id = document.getElementById('article-form-id').value;
+            const title = document.getElementById('article-form-title').value;
+            const link = document.getElementById('article-form-link').value;
+            const content = document.getElementById('article-form-content').value;
+            try {
+                let resp;
+                if (id) {
+                    resp = await fetch(`/api/articles/${id}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({title, content, link})
+                    });
+                } else {
+                    resp = await fetch('/api/articles', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({title, content, link})
+                    });
+                }
+                if (resp.ok) {
+                    hideArticleForm();
+                    await loadArticles();
+                } else {
+                    const err = await resp.json();
+                    alert('Error: ' + (err.detail || 'Failed to save article'));
+                }
+            } catch (error) {
+                console.error('Error saving article:', error);
+            }
+        }
+
+        async function deleteArticle(id) {
+            if (!confirm('Delete this article?')) return;
+            try {
+                const resp = await fetch(`/api/articles/${id}`, {method: 'DELETE'});
+                if (resp.ok) {
+                    await loadArticles();
+                }
+            } catch (error) {
+                console.error('Error deleting article:', error);
+            }
+        }
+
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1084,6 +1367,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         // Initial load
         loadResponses();
         loadMode();
+        loadArticles();
 
         // Auto-refresh every 5 seconds
         setInterval(loadResponses, 5000);
