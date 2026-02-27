@@ -3,16 +3,23 @@ LLM client wrapper for OpenRouter API.
 Handles prompt generation and LLM API calls.
 """
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from openrouter import OpenRouter
+
+from src.prompt_extractor import PromptExtractor
 
 
 class LLMClient:
     """Wrapper for OpenRouter LLM API."""
 
     def __init__(
-        self, api_key: str, model_name: str, max_tokens: int = 2000, temperature: float = 0.7
+        self,
+        api_key: str,
+        model_name: str,
+        max_tokens: int = 2000,
+        temperature: float = 0.7,
+        prompt_extractor: Optional[PromptExtractor] = None,
     ):
         """
         Initialize LLM client.
@@ -22,12 +29,19 @@ class LLMClient:
             model_name: Model identifier (e.g., "google/gemini-flash-2.0")
             max_tokens: Maximum tokens for response
             temperature: Temperature for response generation
+            prompt_extractor: Optional prompt extractor for runtime-editable templates
+                (defaults to factory-created instance based on PROMPT_STORAGE_TYPE)
         """
         self.api_key = api_key
         self.model_name = model_name
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.client = OpenRouter(api_key=api_key)
+
+        if prompt_extractor is None:
+            from src.prompt_extractor_factory import create_prompt_extractor
+            prompt_extractor = create_prompt_extractor()
+        self.prompt_extractor = prompt_extractor
 
     def generate_response(self, prompt: str) -> str:
         """
@@ -52,7 +66,11 @@ class LLMClient:
 
     def load_template(self, template_name: str) -> str:
         """
-        Load a prompt template from the templates directory.
+        Load a prompt template. Checks the prompt extractor first (for runtime-editable
+        templates), then falls back to the templates directory on disk.
+
+        The lookup key is the template_name with the .txt extension stripped
+        (e.g. "debate_prompt.txt" → "debate_prompt").
 
         Args:
             template_name: Name of template file (e.g., "debate_prompt.txt")
@@ -60,7 +78,15 @@ class LLMClient:
         Returns:
             Template content
         """
-        # Get the templates directory relative to this file
+        # Strip .txt extension to get the storage key
+        key = template_name[:-4] if template_name.endswith(".txt") else template_name
+
+        # Check runtime-editable store first
+        stored = self.prompt_extractor.get_prompt(key)
+        if stored:
+            return stored
+
+        # Fall back to filesystem template
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
         template_path = os.path.join(project_root, "templates", template_name)
