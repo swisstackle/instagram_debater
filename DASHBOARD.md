@@ -107,6 +107,7 @@ The dashboard provides REST API endpoints:
 
 - `GET /api/responses` - Get all responses
 - `GET /api/responses/pending` - Get only pending responses
+- `GET /api/responses/posted` - Get only posted responses (with `posted=true`)
 - `POST /api/responses/{id}/approve` - Approve a response
 - `POST /api/responses/{id}/reject` - Reject a response (with reason in body)
 - `POST /api/responses/{id}/edit` - Edit a response (with text in body)

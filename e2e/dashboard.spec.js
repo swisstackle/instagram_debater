@@ -605,6 +605,223 @@ test.describe('Dashboard UI Tests', () => {
     expect(data.articles.length).toBe(0);
   });
 
+  // ================== POSTED TAB TESTS ==================
+
+  test('displays Posted filter tab button', async ({ page }) => {
+    await page.goto('/');
+
+    // The Posted filter tab button should be present
+    await expect(page.locator('[data-filter="posted"]')).toBeVisible();
+    await expect(page.locator('[data-filter="posted"]')).toContainText('Posted');
+  });
+
+  test('shows empty state when no posted responses', async ({ page }) => {
+    await page.goto('/');
+
+    // Click the Posted tab
+    await page.locator('[data-filter="posted"]').click();
+
+    // Should show empty state
+    await expect(page.locator('.empty-state')).toBeVisible();
+    await expect(page.locator('.empty-state')).toContainText('No responses found');
+  });
+
+  test('displays posted responses in Posted tab', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        audit_log: {
+          version: '1.0',
+          entries: [
+            {
+              id: 'log_001',
+              comment_id: 'ig_comment_posted_123',
+              comment_text: 'Posted comment text',
+              generated_response: 'Posted response text',
+              citations_used: ['§1.2'],
+              status: 'approved',
+              posted: true,
+              posted_at: '2026-01-31T20:00:00Z',
+              timestamp: '2026-01-31T19:00:00Z',
+              validation_passed: true,
+              validation_errors: []
+            }
+          ]
+        }
+      }
+    });
+
+    await page.goto('/');
+
+    // Click the Posted tab
+    await page.locator('[data-filter="posted"]').click();
+
+    // Should display the posted response
+    await expect(page.locator('.response-card')).toHaveCount(1);
+    await expect(page.locator('.response-id')).toContainText('log_001');
+  });
+
+  test('Posted tab shows the comment_id of posted responses', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        audit_log: {
+          version: '1.0',
+          entries: [
+            {
+              id: 'log_001',
+              comment_id: 'ig_comment_posted_456',
+              comment_text: 'Some comment',
+              generated_response: 'Some response',
+              citations_used: [],
+              status: 'approved',
+              posted: true,
+              posted_at: '2026-01-31T20:00:00Z',
+              timestamp: '2026-01-31T19:00:00Z',
+              validation_passed: true,
+              validation_errors: []
+            }
+          ]
+        }
+      }
+    });
+
+    await page.goto('/');
+
+    // Click the Posted tab
+    await page.locator('[data-filter="posted"]').click();
+
+    // Response card should show the comment_id
+    const card = page.locator('.response-card');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('ig_comment_posted_456');
+  });
+
+  test('Posted tab excludes non-posted responses', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        audit_log: {
+          version: '1.0',
+          entries: [
+            {
+              id: 'log_001',
+              comment_id: 'comment_pending',
+              comment_text: 'Pending comment',
+              generated_response: 'Pending response',
+              citations_used: [],
+              status: 'pending_review',
+              posted: false,
+              timestamp: '2026-01-31T19:00:00Z',
+              validation_passed: true,
+              validation_errors: []
+            },
+            {
+              id: 'log_002',
+              comment_id: 'comment_posted',
+              comment_text: 'Posted comment',
+              generated_response: 'Posted response',
+              citations_used: [],
+              status: 'approved',
+              posted: true,
+              posted_at: '2026-01-31T20:00:00Z',
+              timestamp: '2026-01-31T19:01:00Z',
+              validation_passed: true,
+              validation_errors: []
+            }
+          ]
+        }
+      }
+    });
+
+    await page.goto('/');
+
+    // Click the Posted tab
+    await page.locator('[data-filter="posted"]').click();
+
+    // Only the posted entry should be visible
+    await expect(page.locator('.response-card')).toHaveCount(1);
+    await expect(page.locator('.response-id')).toContainText('log_002');
+  });
+
+  test('Approved tab excludes already-posted responses', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        audit_log: {
+          version: '1.0',
+          entries: [
+            {
+              id: 'log_001',
+              comment_id: 'comment_approved_not_posted',
+              comment_text: 'Approved but not posted',
+              generated_response: 'Response pending posting',
+              citations_used: [],
+              status: 'approved',
+              posted: false,
+              timestamp: '2026-01-31T19:00:00Z',
+              validation_passed: true,
+              validation_errors: []
+            },
+            {
+              id: 'log_002',
+              comment_id: 'comment_approved_and_posted',
+              comment_text: 'Approved and already posted',
+              generated_response: 'Response already sent',
+              citations_used: [],
+              status: 'approved',
+              posted: true,
+              posted_at: '2026-01-31T20:00:00Z',
+              timestamp: '2026-01-31T19:01:00Z',
+              validation_passed: true,
+              validation_errors: []
+            }
+          ]
+        }
+      }
+    });
+
+    await page.goto('/');
+
+    // Click the Approved tab
+    await page.locator('[data-filter="approved"]').click();
+
+    // Only the non-posted approved entry should be visible
+    await expect(page.locator('.response-card')).toHaveCount(1);
+    await expect(page.locator('.response-id')).toContainText('log_001');
+  });
+
+  test('Posted tab shows Posted Comment ID section', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        audit_log: {
+          version: '1.0',
+          entries: [
+            {
+              id: 'log_001',
+              comment_id: 'ig_comment_789',
+              comment_text: 'Test comment',
+              generated_response: 'Test response',
+              citations_used: [],
+              status: 'approved',
+              posted: true,
+              posted_at: '2026-01-31T20:00:00Z',
+              timestamp: '2026-01-31T19:00:00Z',
+              validation_passed: true,
+              validation_errors: []
+            }
+          ]
+        }
+      }
+    });
+
+    await page.goto('/');
+
+    // Click the Posted tab
+    await page.locator('[data-filter="posted"]').click();
+
+    // "Posted Comment ID" section should be visible with the correct id
+    const postedSection = page.locator('.response-section').filter({ hasText: 'Posted Comment ID' });
+    await expect(postedSection).toBeVisible();
+    await expect(postedSection).toContainText('ig_comment_789');
+  });
+
   test('article form cancel hides form', async ({ page }) => {
     await page.goto('/');
 
