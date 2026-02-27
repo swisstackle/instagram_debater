@@ -618,4 +618,27 @@ test.describe('Dashboard UI Tests', () => {
     // Form should be hidden
     await expect(page.locator('#article-form')).not.toBeVisible();
   });
+
+  test('edit form shows full article content including special characters', async ({ page, request }) => {
+    // Article content with double quotes, newlines, and other special characters
+    // that break HTML data-attribute storage when content is not properly escaped.
+    const fullContent = 'This article argues that "high-load" exercises cause harm.\n\n## Section 1\n\nEvidence shows a "significant" risk.\n\n## Section 2\n\nSee also: <https://example.com> & related work.';
+
+    await request.post('/api/test/seed', {
+      data: {
+        articles: [
+          { id: 'art_001', title: 'Full Content Article', content: fullContent, link: 'https://example.com/full' }
+        ]
+      }
+    });
+
+    await page.goto('/');
+
+    // Click Edit on the article
+    await page.locator('.article-item .btn-edit').click();
+
+    // Form should appear with the FULL content preserved
+    await expect(page.locator('#article-form')).toBeVisible();
+    await expect(page.locator('#article-form-content')).toHaveValue(fullContent);
+  });
 });
