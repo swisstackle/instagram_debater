@@ -176,6 +176,10 @@ async def seed_test_data(request: Request):
     if "pending_comments" in data:
         save_pending_comments(data["pending_comments"])
 
+    if "articles" in data:
+        articles_path = os.path.join(STATE_DIR, "articles.json")
+        save_json_file(articles_path, {"articles": data["articles"]}, ensure_dir=False)
+
     return {"status": "ok"}
 
 # ================== MOUNT DASHBOARD APP ==================

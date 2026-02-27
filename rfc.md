@@ -850,6 +850,41 @@ Stores the auto-post mode setting. Used by the dashboard (write) and processor (
 - Written via `ModeExtractor.set_auto_mode(value)`
 - `Config.auto_post_enabled` delegates to the mode extractor factory for all components
 
+### 9.5 `articles.json`
+
+Stores articles managed via the Article Manager dashboard. Used by the dashboard for CRUD operations.
+
+**Storage Backends:**
+- **Local**: `state/articles.json`
+- **Tigris**: `state/articles.json` (in S3 bucket) — use for distributed deployments; configure via `ARTICLE_STORAGE_TYPE=tigris`
+
+**Format:**
+```json
+{
+  "articles": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "Arguments Against the Big Three",
+      "content": "# Arguments Against the Big Three\n\n...",
+      "link": "https://example.com/article"
+    }
+  ]
+}
+```
+
+**Schema:**
+- `articles` (array, required): List of article objects
+  - `id` (string, required): UUID assigned at creation time
+  - `title` (string, required): Human-readable article title
+  - `content` (string, required): Full article text in Markdown format
+  - `link` (string): URL to the published article (may be empty)
+
+**Access:**
+- Read via `ArticleExtractor.get_articles()` / `ArticleExtractor.get_article(id)`
+- Written via `ArticleExtractor.save_article(id, title, content, link)`
+- Deleted via `ArticleExtractor.delete_article(id)` — returns `False` if ID not found
+- Factory: `create_article_extractor()` selects backend based on `ARTICLE_STORAGE_TYPE` env var
+
 ---
 
 ## 10. Token Limit & Truncation Policy
@@ -919,9 +954,28 @@ All generated responses must pass these checks before being saved or posted:
 - `POST /api/mode` — sets the mode; body: `{"auto_mode": true|false}`, validates boolean type (400 on invalid input)
 - Reads/writes via `ModeExtractor`; set `MODE_STORAGE_TYPE=tigris` so the processor on a separate machine picks up the change immediately
 
-**Tech Stack:** Simple web UI (FastAPI + Bootstrap)
+### 12.2 Article Manager
 
-### 12.2 Manual Workflows
+**Purpose:** Allow humans to create, edit, and delete articles from the dashboard without manual file system access.
+
+**Features:**
+- List all managed articles (title + link displayed inline)
+- Add a new article (title, content in Markdown, optional link)
+- Edit an existing article in-place
+- Delete an article with confirmation
+
+**Article Manager API:**
+- `GET /api/articles` — returns `{"articles": [{id, title, content, link}]}`
+- `POST /api/articles` — creates article with auto-generated UUID; body: `{"title": "...", "content": "...", "link": "..."}` (title and content required, 400 on missing); returns `{"status": "ok", "article_id": "..."}`
+- `PUT /api/articles/{id}` — updates an existing article; body: same as POST (404 if not found)
+- `DELETE /api/articles/{id}` — deletes an article (404 if not found); returns `{"status": "ok", "article_id": "..."}`
+
+**Storage:**
+- Backed by `ArticleExtractor` — set `ARTICLE_STORAGE_TYPE=tigris` for distributed deployments so all process groups (dashboard, processor) share the same article data
+
+**Tech Stack:** Simple web UI (FastAPI + inline JavaScript)
+
+### 12.3 Manual Workflows
 
 **Daily Review (Recommended):**
 1. Check `audit_log.json` for rejected responses

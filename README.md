@@ -38,6 +38,10 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 │   ├── mode_extractor_factory.py    # Factory for creating mode extractors
 │   ├── local_disk_mode_extractor.py # Local disk auto-post mode storage (implements mode_extractor)
 │   ├── tigris_mode_extractor.py     # Tigris/S3 auto-post mode storage (implements mode_extractor)
+│   ├── article_extractor.py         # Abstract article extractor interface
+│   ├── article_extractor_factory.py # Factory for creating article extractors
+│   ├── local_disk_article_extractor.py # Local disk article storage (implements article_extractor)
+│   ├── tigris_article_extractor.py  # Tigris/S3 article storage (implements article_extractor)
 │   ├── config.py                    # Configuration management
 │   ├── file_utils.py                # File utility functions
 │   ├── instagram_api.py             # Instagram Graph API wrapper
@@ -119,6 +123,11 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `MODE_STORAGE_TYPE` - Storage backend for the auto-post mode toggle (`local` or `tigris`, default: `local`)
      - `local` - Stores mode in `state/mode.json` on local disk (single-machine deployments)
      - `tigris` - Stores mode in Tigris object storage (`state/mode.json` in S3 bucket); use this when dashboard, processor, and webhook run on separate machines so all components read the same value
+   
+   **Article storage:**
+   - `ARTICLE_STORAGE_TYPE` - Storage backend for managed articles (`local` or `tigris`, default: `local`)
+     - `local` - Stores articles in `state/articles.json` on local disk
+     - `tigris` - Stores articles in Tigris object storage (`state/articles.json` in S3 bucket); use this for distributed deployments so all components share the same articles
    
    **For Tigris storage (only needed when `COMMENT_STORAGE_TYPE=tigris` or `AUDIT_LOG_STORAGE_TYPE=tigris`):**
    - `AWS_ACCESS_KEY_ID` - Tigris access key ID
@@ -257,13 +266,20 @@ pytest --cov=src tests/
    
    Enables all distributed components (dashboard, processor, webhook) to share the same auto-post mode setting.
 
-9. **Dashboard** (`dashboard.py`)
+9. **Article Extractor** (modular interface)
+   - **Abstract Interface** (`article_extractor.py`) - Defines the contract for article storage (`get_articles`, `get_article`, `save_article`, `delete_article`)
+   - **Local Disk Article Extractor** (`local_disk_article_extractor.py`) - Stores articles in `state/articles.json` (extends `BaseLocalDiskExtractor`)
+   - **Tigris Article Extractor** (`tigris_article_extractor.py`) - Stores articles in Tigris object storage (extends `BaseTigrisExtractor`)
+   - **Factory** (`article_extractor_factory.py`) - Creates appropriate extractor based on `ARTICLE_STORAGE_TYPE`
+
+10. **Dashboard** (`dashboard.py`)
    - Web interface for reviewing responses
    - OAuth login/logout functionality
    - Displays authentication status
    - Shows token expiration information
    - Uses audit log extractor for reading/updating responses
    - **Auto-post mode toggle** — switches between Auto and Manual modes; reads/writes via mode extractor so the change is immediately visible to the processor on any machine
+   - **Article Manager** — create, edit, and delete articles via the dashboard UI; backed by the pluggable article extractor
 
 ## Design Principles
 
@@ -285,8 +301,22 @@ pytest --cov=src tests/
 
 ### Dashboard Endpoints
 
+**Responses:**
+- `GET /api/responses` — list all responses
+- `GET /api/responses/pending` — list pending responses
+- `POST /api/responses/{id}/approve` — approve a response
+- `POST /api/responses/{id}/reject` — reject a response; body: `{"reason": "..."}`
+- `POST /api/responses/{id}/edit` — edit a response; body: `{"text": "..."}`
+
+**Mode:**
 - `GET /api/mode` — returns `{"auto_mode": bool}`
 - `POST /api/mode` — sets the auto-post mode; body: `{"auto_mode": true|false}`
+
+**Articles:**
+- `GET /api/articles` — list all managed articles
+- `POST /api/articles` — create a new article; body: `{"title": "...", "content": "...", "link": "..."}`
+- `PUT /api/articles/{id}` — update an existing article; body: `{"title": "...", "content": "...", "link": "..."}`
+- `DELETE /api/articles/{id}` — delete an article
 
 ## Contributing
 
