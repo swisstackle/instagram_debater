@@ -472,4 +472,150 @@ test.describe('Dashboard UI Tests', () => {
     const modeData = await modeResponse.json();
     expect(modeData.auto_mode).toBe(false);
   });
+
+  // ================== ARTICLE MANAGER TESTS ==================
+
+  test('displays article manager section', async ({ page }) => {
+    await page.goto('/');
+
+    // Article manager section should be visible
+    await expect(page.locator('#article-manager')).toBeVisible();
+    await expect(page.locator('#article-manager h2')).toContainText('Article Manager');
+
+    // Add Article button should be present
+    await expect(page.locator('button:has-text("+ Add Article")')).toBeVisible();
+  });
+
+  test('shows empty state when no articles', async ({ page }) => {
+    await page.goto('/');
+
+    // Article list should show empty message
+    await expect(page.locator('#article-list')).toContainText('No articles yet.');
+  });
+
+  test('displays seeded articles', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        articles: [
+          { id: 'art_001', title: 'Article One', content: '# Content', link: 'https://example.com/1' },
+          { id: 'art_002', title: 'Article Two', content: '# Content 2', link: 'https://example.com/2' }
+        ]
+      }
+    });
+
+    await page.goto('/');
+
+    // Both articles should be visible
+    await expect(page.locator('.article-item')).toHaveCount(2);
+    await expect(page.locator('.article-item-title').nth(0)).toContainText('Article One');
+    await expect(page.locator('.article-item-title').nth(1)).toContainText('Article Two');
+  });
+
+  test('can add a new article', async ({ page, request }) => {
+    await page.goto('/');
+
+    // Click Add Article
+    await page.locator('button:has-text("+ Add Article")').click();
+
+    // Form should appear
+    await expect(page.locator('#article-form')).toBeVisible();
+
+    // Fill in form
+    await page.locator('#article-form-title').fill('My New Article');
+    await page.locator('#article-form-link').fill('https://example.com/new');
+    await page.locator('#article-form-content').fill('# New Article\n\nSome content.');
+
+    // Save
+    await page.locator('#article-form button:has-text("Save")').click();
+
+    // Wait for form to close and article to appear
+    await expect(page.locator('#article-form')).not.toBeVisible();
+    await expect(page.locator('.article-item-title')).toContainText('My New Article');
+
+    // Verify via API
+    const response = await request.get('/api/articles');
+    const data = await response.json();
+    expect(data.articles.length).toBe(1);
+    expect(data.articles[0].title).toBe('My New Article');
+    expect(data.articles[0].content).toBe('# New Article\n\nSome content.');
+    expect(data.articles[0].link).toBe('https://example.com/new');
+  });
+
+  test('can edit an existing article', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        articles: [
+          { id: 'art_001', title: 'Original Title', content: 'Original content', link: 'https://example.com/orig' }
+        ]
+      }
+    });
+
+    await page.goto('/');
+
+    // Click Edit on the article
+    await page.locator('.article-item .btn-edit').click();
+
+    // Form should appear with existing values
+    await expect(page.locator('#article-form')).toBeVisible();
+    await expect(page.locator('#article-form-title')).toHaveValue('Original Title');
+    await expect(page.locator('#article-form-link')).toHaveValue('https://example.com/orig');
+
+    // Update title
+    await page.locator('#article-form-title').clear();
+    await page.locator('#article-form-title').fill('Updated Title');
+
+    // Save
+    await page.locator('#article-form button:has-text("Save")').click();
+
+    // Form closes, updated title shows
+    await expect(page.locator('#article-form')).not.toBeVisible();
+    await expect(page.locator('.article-item-title')).toContainText('Updated Title');
+
+    // Verify via API
+    const response = await request.get('/api/articles');
+    const data = await response.json();
+    expect(data.articles[0].title).toBe('Updated Title');
+  });
+
+  test('can delete an article', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        articles: [
+          { id: 'art_001', title: 'To Be Deleted', content: 'Content', link: 'https://example.com/del' }
+        ]
+      }
+    });
+
+    await page.goto('/');
+
+    // Article should be visible
+    await expect(page.locator('.article-item')).toHaveCount(1);
+
+    // Click Delete and confirm the dialog
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('.article-item .btn-reject').click();
+
+    // Article should be gone
+    await expect(page.locator('.article-item')).toHaveCount(0);
+    await expect(page.locator('#article-list')).toContainText('No articles yet.');
+
+    // Verify via API
+    const response = await request.get('/api/articles');
+    const data = await response.json();
+    expect(data.articles.length).toBe(0);
+  });
+
+  test('article form cancel hides form', async ({ page }) => {
+    await page.goto('/');
+
+    // Open form
+    await page.locator('button:has-text("+ Add Article")').click();
+    await expect(page.locator('#article-form')).toBeVisible();
+
+    // Cancel
+    await page.locator('#article-form button:has-text("Cancel")').click();
+
+    // Form should be hidden
+    await expect(page.locator('#article-form')).not.toBeVisible();
+  });
 });

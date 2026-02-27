@@ -10,6 +10,7 @@ import uvicorn
 from dashboard import create_dashboard_app
 from src.file_utils import load_json_file, save_json_file, get_utc_timestamp
 from src.local_disk_mode_extractor import LocalDiskModeExtractor
+from src.local_disk_article_extractor import LocalDiskArticleExtractor
 
 # Create the main test server app
 app = FastAPI()
@@ -18,9 +19,10 @@ app = FastAPI()
 STATE_DIR = "test_state"
 os.makedirs(STATE_DIR, exist_ok=True)
 
-# Create mode extractor and dashboard app with shared test state directory
+# Create mode extractor, article extractor, and dashboard app with shared test state directory
 _mode_extractor = LocalDiskModeExtractor(state_dir=STATE_DIR)
-dashboard_app = create_dashboard_app(state_dir=STATE_DIR, mode_extractor=_mode_extractor)
+_article_extractor = LocalDiskArticleExtractor(state_dir=STATE_DIR)
+dashboard_app = create_dashboard_app(state_dir=STATE_DIR, mode_extractor=_mode_extractor, article_extractor=_article_extractor)
 
 def get_audit_log_path():
     """Get path to audit log file."""
@@ -155,6 +157,9 @@ async def reset_test_state():
     save_audit_log({"version": "1.0", "entries": []})
     save_pending_comments({"version": "1.0", "comments": []})
     _mode_extractor.set_auto_mode(False)
+    # Clear articles
+    articles_path = os.path.join(STATE_DIR, "articles.json")
+    save_json_file(articles_path, {"articles": []}, ensure_dir=False)
     mock_instagram_state["posts"].clear()
     mock_instagram_state["comments"].clear()
     mock_instagram_state["replies"].clear()
@@ -170,6 +175,10 @@ async def seed_test_data(request: Request):
 
     if "pending_comments" in data:
         save_pending_comments(data["pending_comments"])
+
+    if "articles" in data:
+        articles_path = os.path.join(STATE_DIR, "articles.json")
+        save_json_file(articles_path, {"articles": data["articles"]}, ensure_dir=False)
 
     return {"status": "ok"}
 
