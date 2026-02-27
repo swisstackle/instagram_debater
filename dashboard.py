@@ -780,6 +780,11 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             color: #fff;
         }
 
+        .btn-article-save {
+            background: #28a745;
+            color: #fff;
+        }
+
         .rejection-form {
             margin-top: 1rem;
             padding: 1rem;
@@ -1015,7 +1020,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 <label for="article-form-content">Content (Markdown)</label>
                 <textarea id="article-form-content" placeholder="# Article content..."></textarea>
                 <div class="actions">
-                    <button class="btn btn-save" onclick="submitArticleForm()">Save</button>
+                    <button class="btn btn-article-save" onclick="submitArticleForm()">Save</button>
                     <button class="btn btn-cancel" onclick="hideArticleForm()">Cancel</button>
                 </div>
             </div>
