@@ -3,6 +3,7 @@ Production dashboard server for Instagram Debate Bot.
 Provides a web interface to review and manage generated responses.
 """
 import os
+import uuid
 import secrets
 import logging
 from datetime import datetime, timezone
@@ -225,7 +226,6 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     @app.post("/api/articles")
     async def create_article(request: Request):
         """Create a new article."""
-        import uuid  # pylint: disable=import-outside-toplevel
         logger.info("POST /api/articles")
         data = await request.json()
         title = data.get("title", "").strip()
@@ -1279,12 +1279,16 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 return;
             }
             list.innerHTML = articles.map(article => `
-                <li class="article-item" data-article-id="${article.id}">
+                <li class="article-item"
+                    data-article-id="${escapeHtml(article.id)}"
+                    data-article-title="${escapeHtml(article.title || '')}"
+                    data-article-link="${escapeHtml(article.link || '')}"
+                    data-article-content="${escapeHtml(article.content || '')}">
                     <span class="article-item-title">${escapeHtml(article.title)}</span>
                     <span class="article-item-link">${escapeHtml(article.link || '')}</span>
                     <div class="article-item-actions">
-                        <button class="btn btn-edit" onclick="editArticle('${article.id}', ${JSON.stringify(article).replace(/</g,'&lt;')})">Edit</button>
-                        <button class="btn btn-reject" onclick="deleteArticle('${article.id}')">Delete</button>
+                        <button class="btn btn-edit" onclick="editArticleFromItem(this)">Edit</button>
+                        <button class="btn btn-reject" onclick="deleteArticleFromItem(this)">Delete</button>
                     </div>
                 </li>
             `).join('');
@@ -1302,12 +1306,19 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             document.getElementById('article-form').classList.remove('active');
         }
 
-        function editArticle(id, article) {
+        function editArticleFromItem(btn) {
+            const li = btn.closest('.article-item');
+            const id = li.dataset.articleId;
             document.getElementById('article-form-id').value = id;
-            document.getElementById('article-form-title').value = article.title || '';
-            document.getElementById('article-form-link').value = article.link || '';
-            document.getElementById('article-form-content').value = article.content || '';
+            document.getElementById('article-form-title').value = li.dataset.articleTitle || '';
+            document.getElementById('article-form-link').value = li.dataset.articleLink || '';
+            document.getElementById('article-form-content').value = li.dataset.articleContent || '';
             document.getElementById('article-form').classList.add('active');
+        }
+
+        function deleteArticleFromItem(btn) {
+            const id = btn.closest('.article-item').dataset.articleId;
+            deleteArticle(id);
         }
 
         async function submitArticleForm() {

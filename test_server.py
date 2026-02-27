@@ -158,8 +158,7 @@ async def reset_test_state():
     save_pending_comments({"version": "1.0", "comments": []})
     _mode_extractor.set_auto_mode(False)
     # Clear articles
-    import os as _os
-    articles_path = _os.path.join(STATE_DIR, "articles.json")
+    articles_path = os.path.join(STATE_DIR, "articles.json")
     save_json_file(articles_path, {"articles": []}, ensure_dir=False)
     mock_instagram_state["posts"].clear()
     mock_instagram_state["comments"].clear()
