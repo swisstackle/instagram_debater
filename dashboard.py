@@ -1079,6 +1079,9 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             if (currentFilter === 'posted') {
                 return responses.filter(r => r.posted === true);
             }
+            if (currentFilter === 'approved') {
+                return responses.filter(r => r.status === 'approved' && !r.posted);
+            }
             return responses.filter(r => r.status === currentFilter);
         }
 

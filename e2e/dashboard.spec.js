@@ -741,6 +741,52 @@ test.describe('Dashboard UI Tests', () => {
     await expect(page.locator('.response-id')).toContainText('log_002');
   });
 
+  test('Approved tab excludes already-posted responses', async ({ page, request }) => {
+    await request.post('/api/test/seed', {
+      data: {
+        audit_log: {
+          version: '1.0',
+          entries: [
+            {
+              id: 'log_001',
+              comment_id: 'comment_approved_not_posted',
+              comment_text: 'Approved but not posted',
+              generated_response: 'Response pending posting',
+              citations_used: [],
+              status: 'approved',
+              posted: false,
+              timestamp: '2026-01-31T19:00:00Z',
+              validation_passed: true,
+              validation_errors: []
+            },
+            {
+              id: 'log_002',
+              comment_id: 'comment_approved_and_posted',
+              comment_text: 'Approved and already posted',
+              generated_response: 'Response already sent',
+              citations_used: [],
+              status: 'approved',
+              posted: true,
+              posted_at: '2026-01-31T20:00:00Z',
+              timestamp: '2026-01-31T19:01:00Z',
+              validation_passed: true,
+              validation_errors: []
+            }
+          ]
+        }
+      }
+    });
+
+    await page.goto('/');
+
+    // Click the Approved tab
+    await page.locator('[data-filter="approved"]').click();
+
+    // Only the non-posted approved entry should be visible
+    await expect(page.locator('.response-card')).toHaveCount(1);
+    await expect(page.locator('.response-id')).toContainText('log_001');
+  });
+
   test('Posted tab shows Posted Comment ID section', async ({ page, request }) => {
     await request.post('/api/test/seed', {
       data: {

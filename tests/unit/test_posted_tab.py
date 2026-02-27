@@ -212,3 +212,13 @@ class TestPostedTabEndpoints:
         html = response.body.decode("utf-8")
         # The JS should have logic to filter by posted status
         assert "posted" in html
+
+    def test_dashboard_js_approved_filter_excludes_posted(self, app):
+        """Test that the JS approved filter excludes already-posted entries."""
+        endpoint = self._get_route_endpoint(app, "/", "GET")
+        assert endpoint is not None
+
+        response = asyncio.run(endpoint())
+        html = response.body.decode("utf-8")
+        # The approved filter logic must exclude posted entries
+        assert "!r.posted" in html or "r.posted === false" in html or "!r.posted" in html
