@@ -116,6 +116,16 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         response = JSONResponse(content={"responses": pending})
         return response
 
+    @app.get("/api/responses/posted")
+    async def get_posted_responses():
+        """Get posted responses only."""
+        logger.info("GET /api/responses/posted")
+        audit_log = load_audit_log()
+        entries = audit_log.get("entries", [])
+        posted = [e for e in entries if e.get("posted", False)]
+        response = JSONResponse(content={"responses": posted})
+        return response
+
     @app.post("/api/responses/{response_id}/approve")
     async def approve_response(response_id: str):
         """Approve a response."""
@@ -1031,6 +1041,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 <button class="filter-btn active" data-filter="pending_review">Pending Review</button>
                 <button class="filter-btn" data-filter="approved">Approved</button>
                 <button class="filter-btn" data-filter="rejected">Rejected</button>
+                <button class="filter-btn" data-filter="posted">Posted</button>
                 <button class="filter-btn" data-filter="all">All</button>
             </div>
         </div>
@@ -1064,6 +1075,9 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         function getFilteredResponses() {
             if (currentFilter === 'all') {
                 return responses;
+            }
+            if (currentFilter === 'posted') {
+                return responses.filter(r => r.posted === true);
             }
             return responses.filter(r => r.status === currentFilter);
         }
@@ -1131,6 +1145,13 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                     <div class="response-section">
                         <h3>Rejection Reason</h3>
                         <div class="comment-text">${escapeHtml(response.rejection_reason)}</div>
+                    </div>
+                    ` : ''}
+
+                    ${response.posted ? `
+                    <div class="response-section">
+                        <h3>Posted Comment ID</h3>
+                        <div class="comment-text">${escapeHtml(response.comment_id || 'N/A')}</div>
                     </div>
                     ` : ''}
                 </div>
