@@ -508,6 +508,15 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"Token exchange response: {data}")
+                
+                # Log expires_in value specifically
+                expires_in = None
+                if 'data' in data and len(data['data']) > 0:
+                    expires_in = data['data'][0].get('expires_in')
+                else:
+                    expires_in = data.get('expires_in')
+                logger.info(f"Step 2 token expires_in value: {expires_in if expires_in is not None else 'NOT PRESENT'} seconds")
+                
                 # Instagram API returns data wrapped in a 'data' array
                 # Extract and return the first element
                 if 'data' in data and len(data['data']) > 0:
