@@ -18,12 +18,20 @@ from src.base_json_extractor import BaseTigrisExtractor
 class TigrisTokenExtractor(BaseTigrisExtractor, TokenExtractor):
     """Tigris/S3 implementation for OAuth token storage."""
 
-    def __init__(self):
-        """Initialize the Tigris token extractor."""
+    def __init__(self, account_id: Optional[str] = None):
+        """
+        Initialize the Tigris token extractor.
+
+        Args:
+            account_id: Optional Instagram account ID for per-account namespacing.
+        """
         super().__init__()
+        self.account_id = account_id
 
     def _get_object_key(self) -> str:
         """Get the object key for token storage in S3/Tigris."""
+        if self.account_id:
+            return f"state/accounts/{self.account_id}/instagram_token.json"
         return "state/instagram_token.json"
 
     def save_token(

@@ -6,6 +6,8 @@ allowing all distributed components (dashboard, processor) to share
 the same prompt templates.
 Default object key: state/prompts.json
 """
+from typing import Optional
+
 from src.prompt_extractor import PromptExtractor
 from src.base_json_extractor import BaseTigrisExtractor
 
@@ -18,8 +20,21 @@ class TigrisPromptExtractor(BaseTigrisExtractor, PromptExtractor):
     Default object key: state/prompts.json
     """
 
+    def __init__(self, account_id: Optional[str] = None, **kwargs):
+        """
+        Initialize the Tigris prompt extractor.
+
+        Args:
+            account_id: Optional Instagram account ID for per-account namespacing.
+            **kwargs: Additional keyword arguments passed to BaseTigrisExtractor.
+        """
+        super().__init__(**kwargs)
+        self.account_id = account_id
+
     def _get_object_key(self) -> str:
         """Get the S3 object key for prompt storage."""
+        if self.account_id:
+            return f"state/accounts/{self.account_id}/prompts.json"
         return "state/prompts.json"
 
     def get_prompt(self, name: str) -> str:

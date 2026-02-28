@@ -2,15 +2,21 @@
 Factory for creating comment extractors based on configuration.
 """
 import os
+from typing import Optional
 
 from src.comment_extractor import CommentExtractor
 from src.local_disk_extractor import LocalDiskExtractor
 from src.tigris_extractor import TigrisExtractor
 
 
-def create_comment_extractor() -> CommentExtractor:
+def create_comment_extractor(state_dir: str = "state", account_id: Optional[str] = None) -> CommentExtractor:
     """
     Create a comment extractor based on environment configuration.
+
+    Args:
+        state_dir: Directory for local disk storage (default: "state")
+        account_id: Optional Instagram account ID for per-account namespacing.
+            When provided, storage is scoped to state/accounts/{account_id}/.
 
     Returns:
         CommentExtractor instance (LocalDiskExtractor or TigrisExtractor)
@@ -28,7 +34,9 @@ def create_comment_extractor() -> CommentExtractor:
     storage_type = os.getenv('COMMENT_STORAGE_TYPE', 'local').lower()
 
     if storage_type == 'tigris':
-        return TigrisExtractor()
+        return TigrisExtractor(account_id=account_id)
     else:
         # Default to local disk storage
-        return LocalDiskExtractor()
+        if account_id:
+            state_dir = os.path.join(state_dir, "accounts", account_id)
+        return LocalDiskExtractor(state_dir=state_dir)

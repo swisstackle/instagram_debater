@@ -19,8 +19,21 @@ class TigrisArticleExtractor(BaseTigrisExtractor, ArticleExtractor):
     Default object key: state/articles.json
     """
 
+    def __init__(self, account_id: Optional[str] = None, **kwargs):
+        """
+        Initialize the Tigris article extractor.
+
+        Args:
+            account_id: Optional Instagram account ID for per-account namespacing.
+            **kwargs: Additional keyword arguments passed to BaseTigrisExtractor.
+        """
+        super().__init__(**kwargs)
+        self.account_id = account_id
+
     def _get_object_key(self) -> str:
         """Get the S3 object key for article storage."""
+        if self.account_id:
+            return f"state/accounts/{self.account_id}/articles.json"
         return "state/articles.json"
 
     def get_articles(self) -> List[Dict]:

@@ -25,6 +25,8 @@ from src.article_extractor_factory import create_article_extractor
 from src.article_extractor import ArticleExtractor
 from src.prompt_extractor_factory import create_prompt_extractor
 from src.prompt_extractor import PromptExtractor
+from src.account_registry_factory import create_account_registry
+from src.account_registry import AccountRegistry
 
 # Configure dashboard logger
 logger = logging.getLogger('dashboard')
@@ -61,7 +63,7 @@ def sanitize_log_input(value: str) -> str:
     return sanitized[:200]
 
 
-def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None, article_extractor: ArticleExtractor = None, prompt_extractor: PromptExtractor = None) -> FastAPI:
+def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLogExtractor = None, mode_extractor: ModeExtractor = None, article_extractor: ArticleExtractor = None, prompt_extractor: PromptExtractor = None, account_registry: AccountRegistry = None) -> FastAPI:
     """
     Create a dashboard FastAPI application.
 
@@ -72,6 +74,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         mode_extractor: Optional mode extractor instance (defaults to factory-created)
         article_extractor: Optional article extractor instance (defaults to factory-created)
         prompt_extractor: Optional prompt extractor instance (defaults to factory-created)
+        account_registry: Optional account registry instance (defaults to factory-created)
 
     Returns:
         FastAPI application instance
@@ -84,7 +87,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
     # Use provided mode extractor or create one via factory
     if mode_extractor is None:
-        mode_extractor = create_mode_extractor()
+        mode_extractor = create_mode_extractor(state_dir=state_dir)
 
     # Use provided article extractor or create one via factory
     if article_extractor is None:
@@ -94,51 +97,85 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     if prompt_extractor is None:
         prompt_extractor = create_prompt_extractor(state_dir=state_dir)
 
+    # Use provided account registry or create one via factory
+    if account_registry is None:
+        account_registry = create_account_registry(state_dir=state_dir)
+
+    def _get_scoped_audit_log_extractor(account_id: Optional[str]):
+        """Return per-account extractor when account_id provided, else default."""
+        if account_id:
+            return create_audit_log_extractor(state_dir=state_dir, account_id=account_id)
+        return audit_log_extractor
+
+    def _get_scoped_mode_extractor(account_id: Optional[str]):
+        """Return per-account extractor when account_id provided, else default."""
+        if account_id:
+            return create_mode_extractor(state_dir=state_dir, account_id=account_id)
+        return mode_extractor
+
+    def _get_scoped_article_extractor(account_id: Optional[str]):
+        """Return per-account extractor when account_id provided, else default."""
+        if account_id:
+            return create_article_extractor(state_dir=state_dir, account_id=account_id)
+        return article_extractor
+
+    def _get_scoped_prompt_extractor(account_id: Optional[str]):
+        """Return per-account extractor when account_id provided, else default."""
+        if account_id:
+            return create_prompt_extractor(state_dir=state_dir, account_id=account_id)
+        return prompt_extractor
+
     # ================== STATE MANAGEMENT ==================
-    def load_audit_log():
+    def load_audit_log(scoped_extractor=None):
         """Load audit log entries."""
-        entries = audit_log_extractor.load_entries()
+        extractor = scoped_extractor if scoped_extractor is not None else audit_log_extractor
+        entries = extractor.load_entries()
         return {"version": "1.0", "entries": entries}
 
-    def update_audit_entry(entry_id: str, updates: dict):
+    def update_audit_entry(entry_id: str, updates: dict, scoped_extractor=None):
         """Update a specific audit log entry."""
-        audit_log_extractor.update_entry(entry_id, updates)
+        extractor = scoped_extractor if scoped_extractor is not None else audit_log_extractor
+        extractor.update_entry(entry_id, updates)
 
     # ================== DASHBOARD API ==================
     @app.get("/api/responses")
-    async def get_responses():
+    async def get_responses(account_id: Optional[str] = None):
         """Get all responses from audit log."""
         logger.info("GET /api/responses")
-        audit_log = load_audit_log()
+        scoped = _get_scoped_audit_log_extractor(account_id)
+        audit_log = load_audit_log(scoped)
         response = JSONResponse(content={"responses": audit_log.get("entries", [])})
         return response
 
     @app.get("/api/responses/pending")
-    async def get_pending_responses():
+    async def get_pending_responses(account_id: Optional[str] = None):
         """Get pending responses only."""
         logger.info("GET /api/responses/pending")
-        audit_log = load_audit_log()
+        scoped = _get_scoped_audit_log_extractor(account_id)
+        audit_log = load_audit_log(scoped)
         entries = audit_log.get("entries", [])
         pending = [e for e in entries if e.get("status") == "pending_review"]
         response = JSONResponse(content={"responses": pending})
         return response
 
     @app.get("/api/responses/posted")
-    async def get_posted_responses():
+    async def get_posted_responses(account_id: Optional[str] = None):
         """Get posted responses only."""
         logger.info("GET /api/responses/posted")
-        audit_log = load_audit_log()
+        scoped = _get_scoped_audit_log_extractor(account_id)
+        audit_log = load_audit_log(scoped)
         entries = audit_log.get("entries", [])
         posted = [e for e in entries if e.get("posted", False)]
         response = JSONResponse(content={"responses": posted})
         return response
 
     @app.post("/api/responses/{response_id}/approve")
-    async def approve_response(response_id: str):
+    async def approve_response(response_id: str, account_id: Optional[str] = None):
         """Approve a response."""
         sanitized_id = sanitize_log_input(response_id)
         logger.info(f"POST /api/responses/{sanitized_id}/approve")
-        audit_log = load_audit_log()
+        scoped = _get_scoped_audit_log_extractor(account_id)
+        audit_log = load_audit_log(scoped)
         entries = audit_log.get("entries", [])
 
         for entry in entries:
@@ -147,7 +184,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                     "status": "approved",
                     "approved_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 }
-                update_audit_entry(response_id, updates)
+                update_audit_entry(response_id, updates, scoped)
                 logger.info(f"POST /api/responses/{sanitized_id}/approve - 200")
                 response = JSONResponse(content={"status": "ok", "response_id": response_id})
                 return response
@@ -156,14 +193,15 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         raise HTTPException(status_code=404, detail="Response not found")
 
     @app.post("/api/responses/{response_id}/reject")
-    async def reject_response(response_id: str, request: Request):
+    async def reject_response(response_id: str, request: Request, account_id: Optional[str] = None):
         """Reject a response."""
         sanitized_id = sanitize_log_input(response_id)
         logger.info(f"POST /api/responses/{sanitized_id}/reject")
         data = await request.json()
         reason = data.get("reason", "No reason provided")
 
-        audit_log = load_audit_log()
+        scoped = _get_scoped_audit_log_extractor(account_id)
+        audit_log = load_audit_log(scoped)
         entries = audit_log.get("entries", [])
 
         for entry in entries:
@@ -173,7 +211,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                     "rejected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     "rejection_reason": reason
                 }
-                update_audit_entry(response_id, updates)
+                update_audit_entry(response_id, updates, scoped)
                 logger.info(f"POST /api/responses/{sanitized_id}/reject - 200")
                 response = JSONResponse(content={"status": "ok", "response_id": response_id})
                 return response
@@ -182,14 +220,15 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         raise HTTPException(status_code=404, detail="Response not found")
 
     @app.post("/api/responses/{response_id}/edit")
-    async def edit_response(response_id: str, request: Request):
+    async def edit_response(response_id: str, request: Request, account_id: Optional[str] = None):
         """Edit a response."""
         sanitized_id = sanitize_log_input(response_id)
         logger.info(f"POST /api/responses/{sanitized_id}/edit")
         data = await request.json()
         new_text = data.get("text", "")
 
-        audit_log = load_audit_log()
+        scoped = _get_scoped_audit_log_extractor(account_id)
+        audit_log = load_audit_log(scoped)
         entries = audit_log.get("entries", [])
 
         for entry in entries:
@@ -198,7 +237,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                     "generated_response": new_text,
                     "edited_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 }
-                update_audit_entry(response_id, updates)
+                update_audit_entry(response_id, updates, scoped)
                 logger.info(f"POST /api/responses/{sanitized_id}/edit - 200")
                 response = JSONResponse(content={"status": "ok", "response_id": response_id})
                 return response
@@ -208,16 +247,17 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
     # ================== MODE EDITOR ENDPOINTS ==================
     @app.get("/api/mode")
-    async def get_mode():
+    async def get_mode(account_id: Optional[str] = None):
         """Get the current auto mode setting."""
         logger.info("GET /api/mode")
-        auto_mode = mode_extractor.get_auto_mode()
+        scoped = _get_scoped_mode_extractor(account_id)
+        auto_mode = scoped.get_auto_mode()
         response = JSONResponse(content={"auto_mode": auto_mode})
         logger.info(f"GET /api/mode - 200 auto_mode={auto_mode}")
         return response
 
     @app.post("/api/mode")
-    async def set_mode(request: Request):
+    async def set_mode(request: Request, account_id: Optional[str] = None):
         """Set the auto mode setting."""
         logger.info("POST /api/mode")
         data = await request.json()
@@ -225,23 +265,25 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             logger.warning("POST /api/mode - 400 Invalid or missing auto_mode field")
             raise HTTPException(status_code=400, detail="auto_mode field must be a boolean")
         auto_mode = data["auto_mode"]
-        mode_extractor.set_auto_mode(auto_mode)
+        scoped = _get_scoped_mode_extractor(account_id)
+        scoped.set_auto_mode(auto_mode)
         response = JSONResponse(content={"status": "ok", "auto_mode": auto_mode})
         logger.info(f"POST /api/mode - 200 auto_mode={auto_mode}")
         return response
 
     # ================== ARTICLE MANAGER ENDPOINTS ==================
     @app.get("/api/articles")
-    async def get_articles():
+    async def get_articles(account_id: Optional[str] = None):
         """Get all articles."""
         logger.info("GET /api/articles")
-        articles = article_extractor.get_articles()
+        scoped = _get_scoped_article_extractor(account_id)
+        articles = scoped.get_articles()
         response = JSONResponse(content={"articles": articles})
         logger.info(f"GET /api/articles - 200 count={len(articles)}")
         return response
 
     @app.post("/api/articles")
-    async def create_article(request: Request):
+    async def create_article(request: Request, account_id: Optional[str] = None):
         """Create a new article."""
         logger.info("POST /api/articles")
         data = await request.json()
@@ -255,16 +297,18 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             logger.warning("POST /api/articles - 400 Missing content")
             raise HTTPException(status_code=400, detail="content field is required")
         article_id = str(uuid.uuid4())
-        article_extractor.save_article(article_id, title, content, link)
+        scoped = _get_scoped_article_extractor(account_id)
+        scoped.save_article(article_id, title, content, link)
         logger.info(f"POST /api/articles - 200 article_id={article_id}")
         return JSONResponse(content={"status": "ok", "article_id": article_id})
 
     @app.put("/api/articles/{article_id}")
-    async def update_article(article_id: str, request: Request):
+    async def update_article(article_id: str, request: Request, account_id: Optional[str] = None):
         """Update an existing article."""
         sanitized_id = sanitize_log_input(article_id)
         logger.info(f"PUT /api/articles/{sanitized_id}")
-        existing = article_extractor.get_article(article_id)
+        scoped = _get_scoped_article_extractor(account_id)
+        existing = scoped.get_article(article_id)
         if existing is None:
             logger.warning(f"PUT /api/articles/{sanitized_id} - 404 Article not found")
             raise HTTPException(status_code=404, detail="Article not found")
@@ -272,16 +316,17 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         title = data.get("title", existing.get("title", "")).strip()
         content = data.get("content", existing.get("content", "")).strip()
         link = data.get("link", existing.get("link", "")).strip()
-        article_extractor.save_article(article_id, title, content, link)
+        scoped.save_article(article_id, title, content, link)
         logger.info(f"PUT /api/articles/{sanitized_id} - 200")
         return JSONResponse(content={"status": "ok", "article_id": article_id})
 
     @app.delete("/api/articles/{article_id}")
-    async def delete_article(article_id: str):
+    async def delete_article(article_id: str, account_id: Optional[str] = None):
         """Delete an article."""
         sanitized_id = sanitize_log_input(article_id)
         logger.info(f"DELETE /api/articles/{sanitized_id}")
-        deleted = article_extractor.delete_article(article_id)
+        scoped = _get_scoped_article_extractor(account_id)
+        deleted = scoped.delete_article(article_id)
         if not deleted:
             logger.warning(f"DELETE /api/articles/{sanitized_id} - 404 Article not found")
             raise HTTPException(status_code=404, detail="Article not found")
@@ -290,26 +335,28 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
     # ================== PROMPT EDITOR ENDPOINTS ==================
     @app.get("/api/prompts")
-    async def get_prompts():
+    async def get_prompts(account_id: Optional[str] = None):
         """Get all stored prompt templates."""
         logger.info("GET /api/prompts")
-        prompts = prompt_extractor.get_all_prompts()
+        scoped = _get_scoped_prompt_extractor(account_id)
+        prompts = scoped.get_all_prompts()
         response = JSONResponse(content={"prompts": prompts})
         logger.info(f"GET /api/prompts - 200 count={len(prompts)}")
         return response
 
     @app.get("/api/prompts/{name}")
-    async def get_prompt(name: str):
+    async def get_prompt(name: str, account_id: Optional[str] = None):
         """Get a single prompt template by name."""
         sanitized_name = sanitize_log_input(name)
         logger.info(f"GET /api/prompts/{sanitized_name}")
-        content = prompt_extractor.get_prompt(name)
+        scoped = _get_scoped_prompt_extractor(account_id)
+        content = scoped.get_prompt(name)
         response = JSONResponse(content={"name": name, "content": content})
         logger.info(f"GET /api/prompts/{sanitized_name} - 200")
         return response
 
     @app.put("/api/prompts/{name}")
-    async def set_prompt(name: str, request: Request):
+    async def set_prompt(name: str, request: Request, account_id: Optional[str] = None):
         """Create or update a prompt template by name."""
         sanitized_name = sanitize_log_input(name)
         logger.info(f"PUT /api/prompts/{sanitized_name}")
@@ -318,10 +365,37 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             logger.warning(f"PUT /api/prompts/{sanitized_name} - 400 Missing content field")
             raise HTTPException(status_code=400, detail="content field is required")
         content = data["content"]
-        prompt_extractor.set_prompt(name, content)
+        scoped = _get_scoped_prompt_extractor(account_id)
+        scoped.set_prompt(name, content)
         response = JSONResponse(content={"status": "ok", "name": name})
         logger.info(f"PUT /api/prompts/{sanitized_name} - 200")
         return response
+
+    # ================== ACCOUNT MANAGEMENT ENDPOINTS ==================
+    @app.get("/api/accounts")
+    async def get_accounts():
+        """Get all registered Instagram accounts."""
+        logger.info("GET /api/accounts")
+        accounts = account_registry.get_accounts()
+        response = JSONResponse(content={"accounts": accounts})
+        logger.info(f"GET /api/accounts - 200 count={len(accounts)}")
+        return response
+
+    @app.delete("/api/accounts/{account_id}")
+    async def remove_account_endpoint(account_id: str):
+        """Remove (logout) a specific Instagram account."""
+        sanitized_id = sanitize_log_input(account_id)
+        logger.info(f"DELETE /api/accounts/{sanitized_id}")
+        # Clear per-account token
+        token_extractor = create_token_extractor(account_id=account_id)
+        token_extractor.clear_token()
+        # Remove from registry
+        removed = account_registry.remove_account(account_id)
+        if not removed:
+            logger.warning(f"DELETE /api/accounts/{sanitized_id} - 404 Account not found")
+            raise HTTPException(status_code=404, detail="Account not found")
+        logger.info(f"DELETE /api/accounts/{sanitized_id} - 200")
+        return JSONResponse(content={"status": "ok", "account_id": account_id})
 
     # ================== OAUTH ENDPOINTS ==================
     # Initialize config
@@ -420,15 +494,21 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 logger.error("GET /auth/instagram/callback - 400 Failed to get long-lived token")
                 raise HTTPException(status_code=400, detail="Failed to get long-lived token")
             
-            # Step 3: Store long-lived token
-            token_extractor = create_token_extractor()
-            token_extractor.save_token(
+            # Step 3: Store long-lived token scoped to this account
+            account_id = short_lived_data.get('user_id')
+            username = short_lived_data.get('username', '')
+            token_ext = create_token_extractor(account_id=account_id)
+            token_ext.save_token(
                 access_token=long_lived_data['access_token'],
                 token_type=long_lived_data.get('token_type', 'bearer'),
                 expires_in=long_lived_data.get('expires_in', 5184000),
-                user_id=short_lived_data.get('user_id'),
-                username=short_lived_data.get('username')
+                user_id=account_id,
+                username=username
             )
+
+            # Step 4: Register account in the account registry
+            if account_id:
+                account_registry.add_account(account_id=account_id, username=username)
             
             # Redirect to dashboard
             logger.info("GET /auth/instagram/callback - 303 OAuth successful, redirecting to dashboard")
@@ -443,14 +523,20 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             raise HTTPException(status_code=500, detail="OAuth authentication failed") from e
 
     @app.get("/auth/instagram/logout")
-    async def instagram_oauth_logout():
+    async def instagram_oauth_logout(account_id: Optional[str] = None):
         """
         Clear user session and logout.
         Removes stored token and clears session.
+
+        Args:
+            account_id: Optional account ID to log out a specific account.
+                If not provided, clears the legacy (non-namespaced) token.
         """
         logger.info("GET /auth/instagram/logout")
-        token_extractor = create_token_extractor()
-        token_extractor.clear_token()
+        token_ext = create_token_extractor(account_id=account_id)
+        token_ext.clear_token()
+        if account_id:
+            account_registry.remove_account(account_id)
         logger.info("GET /auth/instagram/logout - 303 Token cleared, redirecting to dashboard")
         return RedirectResponse(url="/", status_code=303)
 
@@ -528,20 +614,28 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     async def dashboard_home():
         """Dashboard home page."""
         logger.info("GET /")
-        # Check if user is authenticated
-        token_extractor = create_token_extractor()
-        token_data = token_extractor.get_token()
-        is_authenticated = token_data is not None and not token_extractor.is_token_expired()
-        
-        # Build auth section HTML
-        if is_authenticated:
-            username = token_data.get('username', 'User')
-            user_id = token_data.get('user_id', 'N/A')
+        # Load all registered accounts
+        accounts = account_registry.get_accounts()
+
+        # Build per-account auth rows
+        if accounts:
+            account_rows = ""
+            for acct in accounts:
+                acct_id = acct.get("id", "")
+                acct_username = acct.get("username", "Unknown")
+                acct_logged_in = acct.get("logged_in_at", "")
+                account_rows += f"""
+                    <div class="account-row">
+                        <span class="auth-status authenticated">✓</span>
+                        <span class="user-info">@{acct_username} (ID: {acct_id})</span>
+                        <span class="user-info" style="font-size:0.75rem;color:#999;">Logged in: {acct_logged_in}</span>
+                        <a href="/auth/instagram/logout?account_id={acct_id}" class="btn-logout">Logout</a>
+                    </div>
+                """
             auth_section = f"""
-                <div class="auth-info">
-                    <span class="auth-status authenticated">✓ Authenticated</span>
-                    <span class="user-info">@{username} (ID: {user_id})</span>
-                    <a href="/auth/instagram/logout" class="btn-logout">Logout</a>
+                <div class="auth-info" style="flex-direction:column;align-items:flex-start;gap:0.5rem;">
+                    {account_rows}
+                    <a href="/auth/instagram/login" class="btn-login" style="margin-top:0.5rem;">Add Account</a>
                 </div>
             """
         else:

@@ -1,7 +1,7 @@
 """
 Tigris/S3-compatible storage implementation of audit log storage.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.audit_log_extractor import AuditLogExtractor
 from src.base_json_extractor import BaseTigrisExtractor
@@ -15,8 +15,21 @@ class TigrisAuditExtractor(BaseTigrisExtractor, AuditLogExtractor):
     Default object key: state/audit_log.json
     """
 
+    def __init__(self, account_id: Optional[str] = None, **kwargs):
+        """
+        Initialize the Tigris audit log extractor.
+
+        Args:
+            account_id: Optional Instagram account ID for per-account namespacing.
+            **kwargs: Additional keyword arguments passed to BaseTigrisExtractor.
+        """
+        super().__init__(**kwargs)
+        self.account_id = account_id
+
     def _get_object_key(self) -> str:
         """Get the S3 object key for audit log storage."""
+        if self.account_id:
+            return f"state/accounts/{self.account_id}/audit_log.json"
         return "state/audit_log.json"
 
     def save_entry(self, entry: Dict[str, Any]) -> None:
