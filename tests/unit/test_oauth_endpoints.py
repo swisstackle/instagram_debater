@@ -117,14 +117,10 @@ class TestOAuthHelpers:
             )
             
             # Simulate the long-lived token exchange
-            response = requests.get(
-                'https://graph.instagram.com/access_token',
-                params={
-                    'grant_type': 'ig_exchange_token',
-                    'client_secret': 'test_secret',
-                    'access_token': 'short_lived_token'
-                }
-            )
+            short_token = 'short_lived_token'
+            secret = 'test_secret'
+            url = f'https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret={secret}&access_token={short_token}'
+            response = requests.get(url)
             
             assert response.status_code == 200
             data = response.json()
