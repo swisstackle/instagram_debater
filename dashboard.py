@@ -484,6 +484,23 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         logger.info("GET /auth/instagram/logout - 303 Token cleared, redirecting to dashboard")
         return RedirectResponse(url="/", status_code=303)
 
+    @app.get("/auth/instagram/diagnostics")
+    async def instagram_oauth_diagnostics():
+        """
+        Run diagnostics against Instagram Graph endpoints using stored token.
+        """
+        logger.info("GET /auth/instagram/diagnostics")
+        token_extractor = create_token_extractor()
+        token_data = token_extractor.get_token()
+        if not token_data or not token_data.get('access_token'):
+            logger.error("GET /auth/instagram/diagnostics - 401 Missing access token")
+            raise HTTPException(status_code=401, detail="Missing access token")
+
+        access_token = token_data['access_token']
+        user_id = token_data.get('user_id')
+        diagnostics = run_instagram_webhook_diagnostics(access_token, user_id)
+        return JSONResponse(content=diagnostics)
+
     # Helper functions for OAuth
     def exchange_code_for_token(
         code: str, 
@@ -644,6 +661,61 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         except requests.RequestException as e:
             logger.error(f"Webhook unsubscription request failed: {e}")
             return False
+
+    def run_instagram_webhook_diagnostics(access_token: str, user_id: str = None) -> Dict[str, Any]:
+        """
+        Test /me and subscribed_apps endpoints against both graph hosts.
+        Returns a dict of status codes and response bodies for debugging.
+        """
+        endpoint_id = user_id if user_id else 'me'
+        results: Dict[str, Any] = {}
+
+        def _safe_response(response: requests.Response) -> Dict[str, Any]:
+            return {
+                'status_code': response.status_code,
+                'text': response.text
+            }
+
+        # Test /me on both hosts
+        for host_key, host in (
+            ('graph_instagram', 'https://graph.instagram.com'),
+            ('graph_facebook', 'https://graph.facebook.com')
+        ):
+            me_url = f"{host}/v25.0/me"
+            try:
+                response = requests.get(
+                    me_url,
+                    params={
+                        'fields': 'id,username,account_type',
+                        'access_token': access_token
+                    },
+                    timeout=30
+                )
+                results[f"me_{host_key}"] = _safe_response(response)
+            except requests.RequestException as e:
+                results[f"me_{host_key}"] = {'error': str(e)}
+
+        # Test subscription on both hosts
+        for host_key, host in (
+            ('graph_instagram', 'https://graph.instagram.com'),
+            ('graph_facebook', 'https://graph.facebook.com')
+        ):
+            subscribe_url = f"{host}/v25.0/{endpoint_id}/subscribed_apps"
+            try:
+                response = requests.post(
+                    subscribe_url,
+                    params={
+                        'subscribed_fields': 'comments,mentions',
+                        'access_token': access_token
+                    },
+                    timeout=30
+                )
+                results[f"subscribe_{host_key}"] = _safe_response(response)
+            except requests.RequestException as e:
+                results[f"subscribe_{host_key}"] = {'error': str(e)}
+
+        results['endpoint_id'] = endpoint_id
+        return results
 
     # ================== DASHBOARD UI ==================
     @app.get("/", response_class=HTMLResponse)
