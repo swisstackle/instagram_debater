@@ -490,6 +490,19 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         logger.info("GET /auth/instagram/logout - 303 Token cleared, redirecting to dashboard")
         return RedirectResponse(url="/", status_code=303)
 
+    @app.get("/auth/instagram/test-token")
+    async def test_instagram_token(token: str):
+        """
+        Test a manually-provided Instagram token against Graph endpoints.
+        Used for comparing OAuthToken vs manually-generated app token.
+        """
+        logger.info("GET /auth/instagram/test-token")
+        if not token:
+            raise HTTPException(status_code=400, detail="Missing token parameter")
+        
+        diagnostics = run_instagram_webhook_diagnostics(token)
+        return JSONResponse(content=diagnostics)
+
     @app.get("/auth/instagram/diagnostics")
     async def instagram_oauth_diagnostics():
         """
