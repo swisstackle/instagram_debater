@@ -490,7 +490,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             redirect_uri: Registered redirect URI
             
         Returns:
-            Dictionary with token data or None if failed
+            Dictionary with token data (access_token, user_id, permissions) or None if failed
         """
         try:
             response = requests.post(
@@ -506,7 +506,13 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             )
             
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                # Instagram API returns data wrapped in a 'data' array
+                # Extract and return the first element
+                if 'data' in data and len(data['data']) > 0:
+                    return data['data'][0]
+                # Fallback if format is different
+                return data
             return None
         except requests.RequestException:
             return None

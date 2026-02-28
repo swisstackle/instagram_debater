@@ -77,8 +77,10 @@ class TestOAuthHelpers:
             m.post(
                 'https://api.instagram.com/oauth/access_token',
                 json={
-                    'access_token': 'short_lived_token_123',
-                    'user_id': '12345'
+                    'data': [{
+                        'access_token': 'short_lived_token_123',
+                        'user_id': '12345'
+                    }]
                 }
             )
             
@@ -96,8 +98,9 @@ class TestOAuthHelpers:
             
             assert response.status_code == 200
             data = response.json()
-            assert data['access_token'] == 'short_lived_token_123'
-            assert data['user_id'] == '12345'
+            # API returns data wrapped in 'data' array
+            assert data['data'][0]['access_token'] == 'short_lived_token_123'
+            assert data['data'][0]['user_id'] == '12345'
 
     def test_exchange_for_long_lived_token_mock(self):
         """Test long-lived token exchange with mocked Instagram API."""
@@ -296,9 +299,11 @@ class TestOAuthHelpers:
             m.post(
                 'https://api.instagram.com/oauth/access_token',
                 json={
-                    'access_token': 'short_lived_token_123',
-                    'user_id': 'ig_user_789',
-                    'username': 'testuser'
+                    'data': [{
+                        'access_token': 'short_lived_token_123',
+                        'user_id': 'ig_user_789',
+                        'username': 'testuser'
+                    }]
                 }
             )
             m.get(
@@ -358,9 +363,11 @@ class TestOAuthHelpers:
             m.post(
                 'https://api.instagram.com/oauth/access_token',
                 json={
-                    'access_token': 'short_lived_token_123',
-                    'user_id': 'ig_user_789',
-                    'username': 'testuser'
+                    'data': [{
+                        'access_token': 'short_lived_token_123',
+                        'user_id': 'ig_user_789',
+                        'username': 'testuser'
+                    }]
                 }
             )
             m.get(
