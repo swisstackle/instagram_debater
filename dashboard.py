@@ -411,6 +411,12 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             if not short_lived_data:
                 logger.error("GET /auth/instagram/callback - 400 Failed to exchange authorization code")
                 raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
+
+            # Fetch profile info via /me to confirm token works on graph.instagram.com
+            profile_data = fetch_instagram_user_profile(short_lived_data['access_token'])
+            if profile_data:
+                short_lived_data['user_id'] = profile_data.get('user_id') or short_lived_data.get('user_id')
+                short_lived_data['username'] = profile_data.get('username') or short_lived_data.get('username')
             
             # Step 2: Exchange short-lived token for long-lived token
             # TESTING: Commenting out Step 2 exchange - Instagram Business tokens may not need exchange
@@ -603,23 +609,25 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             return False
 
         try:
-            endpoint_id = user_id if user_id else 'me'
-            url = f'https://graph.instagram.com/v25.0/{endpoint_id}/subscribed_apps'
             params = {
                 'subscribed_fields': 'comments,mentions',
                 'access_token': access_token
             }
-            logger.info(
-                f"Subscribing webhooks for user {endpoint_id} with fields: comments,mentions"
-            )
-            response = requests.post(url, params=params, timeout=30)
 
-            if response.status_code == 200:
-                logger.info(f"Webhook subscription successful for user {endpoint_id}")
-                return True
-            logger.error(
-                f"Webhook subscription failed with status {response.status_code}: {response.text}"
-            )
+            # Try /me first (documented), then fallback to /{user_id} if available
+            for endpoint_id in (['me'] + ([user_id] if user_id else [])):
+                url = f'https://graph.instagram.com/v25.0/{endpoint_id}/subscribed_apps'
+                logger.info(
+                    f"Subscribing webhooks for user {endpoint_id} with fields: comments,mentions"
+                )
+                response = requests.post(url, params=params, timeout=30)
+
+                if response.status_code == 200:
+                    logger.info(f"Webhook subscription successful for user {endpoint_id}")
+                    return True
+                logger.error(
+                    f"Webhook subscription failed with status {response.status_code}: {response.text}"
+                )
             return False
         except requests.RequestException as e:
             logger.error(f"Webhook subscription request failed: {e}")
@@ -640,27 +648,57 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             return False
 
         try:
-            endpoint_id = user_id if user_id else 'me'
-            url = f'https://graph.instagram.com/v25.0/{endpoint_id}/subscribed_apps'
-            logger.info(f"Unsubscribing webhooks for user {endpoint_id}")
-            response = requests.delete(
-                url,
+            # Try /me first (documented), then fallback to /{user_id} if available
+            for endpoint_id in (['me'] + ([user_id] if user_id else [])):
+                url = f'https://graph.instagram.com/v25.0/{endpoint_id}/subscribed_apps'
+                logger.info(f"Unsubscribing webhooks for user {endpoint_id}")
+                response = requests.delete(
+                    url,
+                    params={
+                        'access_token': access_token
+                    },
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"Webhook unsubscription successful for user {endpoint_id}")
+                    return True
+                logger.error(
+                    f"Webhook unsubscription failed with status {response.status_code}: {response.text}"
+                )
+            return False
+        except requests.RequestException as e:
+            logger.error(f"Webhook unsubscription request failed: {e}")
+            return False
+
+    def fetch_instagram_user_profile(access_token: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch app user's profile via /me on graph.instagram.com.
+        """
+        try:
+            response = requests.get(
+                'https://graph.instagram.com/v25.0/me',
                 params={
+                    'fields': 'user_id,username',
                     'access_token': access_token
                 },
                 timeout=30
             )
 
-            if response.status_code == 200:
-                logger.info(f"Webhook unsubscription successful for user {endpoint_id}")
-                return True
-            logger.error(
-                f"Webhook unsubscription failed with status {response.status_code}: {response.text}"
-            )
-            return False
+            if response.status_code != 200:
+                logger.error(
+                    f"/me profile fetch failed with status {response.status_code}: {response.text}"
+                )
+                return None
+
+            payload = response.json()
+            # Some endpoints return a data array
+            if isinstance(payload, dict) and 'data' in payload and payload['data']:
+                return payload['data'][0]
+            return payload
         except requests.RequestException as e:
-            logger.error(f"Webhook unsubscription request failed: {e}")
-            return False
+            logger.error(f"/me profile fetch request failed: {e}")
+            return None
 
     def run_instagram_webhook_diagnostics(access_token: str, user_id: str = None) -> Dict[str, Any]:
         """
@@ -686,7 +724,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 response = requests.get(
                     me_url,
                     params={
-                        'fields': 'id,username,account_type',
+                        'fields': 'user_id,username',
                         'access_token': access_token
                     },
                     timeout=30
