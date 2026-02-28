@@ -440,7 +440,8 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
             # Step 4: Subscribe this account to webhook events
             subscribed = subscribe_instagram_webhooks(
-                access_token=long_lived_data['access_token']
+                access_token=long_lived_data['access_token'],
+                user_id=short_lived_data.get('user_id')
             )
             if not subscribed:
                 logger.error("GET /auth/instagram/callback - 400 Failed to subscribe webhook events")
@@ -470,7 +471,10 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
 
         # Unsubscribe account-level webhooks before clearing local token
         if token_data and token_data.get('access_token'):
-            unsubscribed = unsubscribe_instagram_webhooks(token_data['access_token'])
+            unsubscribed = unsubscribe_instagram_webhooks(
+                token_data['access_token'],
+                user_id=token_data.get('user_id')
+            )
             if not unsubscribed:
                 logger.error("GET /auth/instagram/logout - 502 Failed to unsubscribe webhook events")
                 raise HTTPException(status_code=502, detail="Failed to unsubscribe webhook events")
@@ -566,12 +570,13 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             logger.error(f"Long-lived token exchange request failed: {e}")
             return None
 
-    def subscribe_instagram_webhooks(access_token: str) -> bool:
+    def subscribe_instagram_webhooks(access_token: str, user_id: str = None) -> bool:
         """
         Subscribe the logged-in Instagram account to app webhooks.
 
         Args:
             access_token: Long-lived access token
+            user_id: Instagram user ID (optional, will use 'me' if not provided)
 
         Returns:
             True when subscription succeeds, False otherwise
@@ -580,25 +585,35 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             return False
 
         try:
-            response = requests.post(
-                'https://graph.instagram.com/v25.0/me/subscribed_apps',
-                data={
-                    'subscribed_fields': 'comments,mentions',
-                    'access_token': access_token
-                },
-                timeout=30
+            endpoint_id = user_id if user_id else 'me'
+            url = f'https://graph.instagram.com/v25.0/{endpoint_id}/subscribed_apps'
+            params = {
+                'subscribed_fields': 'comments,mentions',
+                'access_token': access_token
+            }
+            logger.info(
+                f"Subscribing webhooks for user {endpoint_id} with fields: comments,mentions"
             )
+            response = requests.post(url, params=params, timeout=30)
 
-            return response.status_code == 200
-        except requests.RequestException:
+            if response.status_code == 200:
+                logger.info(f"Webhook subscription successful for user {endpoint_id}")
+                return True
+            logger.error(
+                f"Webhook subscription failed with status {response.status_code}: {response.text}"
+            )
+            return False
+        except requests.RequestException as e:
+            logger.error(f"Webhook subscription request failed: {e}")
             return False
 
-    def unsubscribe_instagram_webhooks(access_token: str) -> bool:
+    def unsubscribe_instagram_webhooks(access_token: str, user_id: str = None) -> bool:
         """
         Unsubscribe the logged-in Instagram account from app webhooks.
 
         Args:
             access_token: Long-lived access token
+            user_id: Instagram user ID (optional, will use 'me' if not provided)
 
         Returns:
             True when unsubscription succeeds, False otherwise
@@ -607,16 +622,26 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             return False
 
         try:
+            endpoint_id = user_id if user_id else 'me'
+            url = f'https://graph.instagram.com/v25.0/{endpoint_id}/subscribed_apps'
+            logger.info(f"Unsubscribing webhooks for user {endpoint_id}")
             response = requests.delete(
-                'https://graph.instagram.com/v25.0/me/subscribed_apps',
+                url,
                 params={
                     'access_token': access_token
                 },
                 timeout=30
             )
 
-            return response.status_code == 200
-        except requests.RequestException:
+            if response.status_code == 200:
+                logger.info(f"Webhook unsubscription successful for user {endpoint_id}")
+                return True
+            logger.error(
+                f"Webhook unsubscription failed with status {response.status_code}: {response.text}"
+            )
+            return False
+        except requests.RequestException as e:
+            logger.error(f"Webhook unsubscription request failed: {e}")
             return False
 
     # ================== DASHBOARD UI ==================
