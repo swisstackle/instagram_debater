@@ -8,8 +8,8 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
 - Monitors comments on designated Instagram posts
 - MAINTAINS TRANSPARENCY BY IDENTIFYING ITSELF AS A BOT
 - Identifies debatable claims using AI
-- Selects the most relevant article from multiple sources
-- Responds with relevant citations and arguments from the selected article
+- Considers all relevant articles from multiple sources for each comment
+- Responds with citations and arguments drawn from a combined context of all matching articles
 
 - Operates without persistent databases or vector stores
 
@@ -238,7 +238,8 @@ pytest --cov=src tests/
 3. **Comment Processor** (`processor.py`)
    - Loads pending comments via comment extractor
    - Filters out any comments from the bot's own account (defense-in-depth)
-   - Selects relevant article from multiple sources
+   - Selects **all** relevant articles from multiple sources (not just the first match)
+   - Merges relevant articles into a combined context within the prompt size budget
    - Checks relevance using LLM
    - Generates responses with citations
    - Validates responses
@@ -311,7 +312,7 @@ pytest --cov=src tests/
 - **No Database**: Uses simple storage backends (JSON files or object storage)
 - **No Vector Store**: Feeds full article to LLM each time
 - **Stateless**: Each run is independent
-- **Multiple Sources**: Supports multiple articles, selects most relevant per comment
+- **Multiple Sources**: Supports multiple articles; considers all relevant articles per comment, merging them into a combined context within the prompt size budget
 - **Zero Hallucination**: All responses cite article content
 - **Modular Storage**: Pluggable storage backends allow distributed deployment
 - **Transparent**: Clearly identifies as a bot

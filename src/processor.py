@@ -177,6 +177,88 @@ class CommentProcessor:
                 return article
         return None
 
+    def select_relevant_articles(
+        self,
+        articles: List[Dict[str, Any]],
+        post_caption: str,
+        comment_text: str,
+        thread_context: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Select all relevant articles from a list based on content.
+
+        Args:
+            articles: List of article dictionaries
+            post_caption: Post caption
+            comment_text: Comment text
+            thread_context: Thread conversation context
+
+        Returns:
+            List of all matching article dictionaries (empty list if none match)
+        """
+        return [
+            article for article in articles
+            if self.llm_client.check_topic_relevance(
+                article["title"],
+                article["summary"],
+                post_caption,
+                comment_text,
+                thread_context
+            )
+        ]
+
+    def build_combined_article_context(
+        self,
+        articles: List[Dict[str, Any]],
+        max_chars: int = 10000
+    ) -> str:
+        """
+        Build a combined article context from multiple articles, respecting a character limit.
+
+        The first article is always included in full. Additional articles are appended
+        (with a separator) as long as the total does not exceed max_chars. If an
+        additional article would push the total over the limit, only its title and
+        summary are included as a brief reference.
+
+        Args:
+            articles: List of article dictionaries (ordered by relevance, most relevant first)
+            max_chars: Maximum number of characters for the combined context
+
+        Returns:
+            Combined article text respecting the character limit
+        """
+        if not articles:
+            return ""
+
+        # Always include the first (primary) article in full
+        primary = articles[0]["content"]
+        # If even the primary article exceeds the limit, truncate at a paragraph boundary
+        if len(primary) > max_chars:
+            truncated = primary[:max_chars]
+            last_para_break = truncated.rfind("\n\n")
+            combined = truncated[:last_para_break] if last_para_break != -1 else truncated
+        else:
+            combined = primary
+
+        for article in articles[1:]:
+            separator = f"\n\n---\n\n## Additional Reference: {article['title']}\n\n"
+            additional_content = article["content"]
+            candidate = combined + separator + additional_content
+            if len(candidate) <= max_chars:
+                combined = candidate
+            else:
+                # Include just the title and summary as a brief reference if it fits
+                brief = separator + article.get("summary", "")
+                if len(combined) + len(brief) <= max_chars:
+                    combined = combined + brief
+                else:
+                    print(
+                        f"Article '{article.get('title', 'unknown')}' excluded from context "
+                        f"due to size constraints"
+                    )
+
+        return combined
+
     def process_comment(
         self, comment: Dict[str, Any], article_text: str, is_numbered: bool = True
     ) -> Optional[Dict[str, Any]]:
@@ -271,6 +353,9 @@ class CommentProcessor:
         """
         Process a single comment with multiple articles available.
 
+        All relevant articles are considered. The combined article context is
+        built from all matching articles within the prompt size limit.
+
         Args:
             comment: Comment data dictionary
             articles: List of article dictionaries
@@ -290,26 +375,32 @@ class CommentProcessor:
             comment["post_id"]
         )
 
-        # Select relevant article
-        selected_article = self.select_relevant_article(
+        # Select ALL relevant articles
+        relevant_articles = self.select_relevant_articles(
             articles,
             post_caption,
             comment["text"],
             thread_context
         )
 
-        if not selected_article:
+        if not relevant_articles:
             self.save_no_match_log(comment, "No relevant article found for this comment")
             return None
 
-        # Generate response using selected article
-        # Choose template based on whether article is numbered
-        is_numbered = selected_article.get("is_numbered", True)
+        # Use the primary (first) article for metadata and validation
+        primary_article = relevant_articles[0]
+
+        # Build combined context from all relevant articles within size limit
+        combined_article_text = self.build_combined_article_context(relevant_articles)
+
+        # Generate response using combined article context
+        # Choose template based on whether primary article is numbered
+        is_numbered = primary_article.get("is_numbered", True)
         template_name = "debate_prompt.txt" if is_numbered else "debate_prompt_unnumbered.txt"
         template = self.llm_client.load_template(template_name)
         prompt = self.llm_client.fill_template(template, {
-            "TOPIC": selected_article["title"],
-            "FULL_ARTICLE_TEXT": selected_article["content"],
+            "TOPIC": primary_article["title"],
+            "FULL_ARTICLE_TEXT": combined_article_text,
             "POST_CAPTION": post_caption,
             "USERNAME": comment["username"],
             "COMMENT_TEXT": comment["text"],
@@ -321,8 +412,10 @@ class CommentProcessor:
 
         response_text = self.llm_client.generate_response(prompt)
 
-        # Create validator with is_numbered flag
-        validator = ResponseValidator(selected_article["content"], is_numbered=is_numbered)
+        # Create validator with is_numbered flag using primary article for citation validation.
+        # Note: Citations from secondary articles in the combined context may not be
+        # recognised by the validator, which only knows about the primary article's sections.
+        validator = ResponseValidator(primary_article["content"], is_numbered=is_numbered)
 
         # Validate response
         is_valid, errors = validator.validate_response(response_text)
@@ -347,9 +440,9 @@ class CommentProcessor:
             "validation_passed": True,
             "validation_errors": [],
             "article_used": {
-                "path": selected_article["path"],
-                "link": selected_article["link"],
-                "title": selected_article["title"]
+                "path": primary_article["path"],
+                "link": primary_article["link"],
+                "title": primary_article["title"]
             }
         }
 
