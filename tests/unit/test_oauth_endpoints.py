@@ -149,13 +149,10 @@ class TestOAuthHelpers:
         redirect_uri = "https://example.com/auth/instagram/callback"
         state = "random_state_456"
         
-        # Business scopes as per Facebook documentation
+        # Instagram Login scopes for Instagram Business app
         business_scopes = [
             "instagram_business_basic",
-            "instagram_business_manage_messages",
-            "instagram_business_manage_comments",
-            "instagram_business_content_publish",
-            "instagram_business_manage_insights"
+            "instagram_business_manage_comments"
         ]
         scope = ",".join(business_scopes)
         
@@ -246,13 +243,10 @@ class TestOAuthHelpers:
                 assert 'scope' in query_params
                 scopes = query_params['scope'][0].split(',')
                 
-                # All required business scopes must be present
+                # Required scopes must be present
                 required_scopes = [
                     "instagram_business_basic",
-                    "instagram_business_manage_messages",
-                    "instagram_business_manage_comments",
-                    "instagram_business_content_publish",
-                    "instagram_business_manage_insights"
+                    "instagram_business_manage_comments"
                 ]
                 for scope in required_scopes:
                     assert scope in scopes, f"Missing required business scope: {scope}"

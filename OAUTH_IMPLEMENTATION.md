@@ -8,8 +8,8 @@ This implementation adds Instagram Business Login using OAuth 2.0 to the Instagr
 
 ### 1. OAuth Configuration (`src/config.py`)
 Added three new configuration properties:
-- `instagram_client_id`: Facebook App ID
-- `instagram_client_secret`: Facebook App Secret  
+- `instagram_client_id`: Instagram app ID
+- `instagram_client_secret`: Instagram app secret  
 - `instagram_redirect_uri`: OAuth callback URL (default: http://127.0.0.1:5000/auth/instagram/callback)
 
 ### 2. Token Manager (`src/token_manager.py`)
@@ -28,11 +28,8 @@ Implemented three OAuth endpoints:
 - Redirects user to Instagram OAuth authorization page with `force_reauth=true`
 - Uses Instagram Business endpoint: `www.instagram.com/oauth/authorize`
 - Requests business scopes:
-  - `instagram_business_basic` - Basic profile and page info
-  - `instagram_business_manage_messages` - Manage DMs
-  - `instagram_business_manage_comments` - Read and manage comments
-  - `instagram_business_content_publish` - Publish content
-  - `instagram_business_manage_insights` - Access insights
+   - `instagram_business_basic` - Basic profile and page info
+   - `instagram_business_manage_comments` - Read and manage comments
 
 #### `/auth/instagram/callback`
 - Validates CSRF state parameter

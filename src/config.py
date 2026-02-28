@@ -156,12 +156,12 @@ class Config:
 
     @property
     def instagram_client_id(self) -> str:
-        """Get Instagram OAuth client ID (Facebook App ID)."""
+        """Get Instagram OAuth client ID (Instagram app ID)."""
         return os.getenv("INSTAGRAM_CLIENT_ID", "")
 
     @property
     def instagram_client_secret(self) -> str:
-        """Get Instagram OAuth client secret (Facebook App Secret)."""
+        """Get Instagram OAuth client secret (Instagram app secret)."""
         return os.getenv("INSTAGRAM_CLIENT_SECRET", "")
 
     @property

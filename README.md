@@ -86,13 +86,13 @@ The Instagram Debate-Bot is a lightweight, stateless automation tool that:
    - `MODEL_NAME` - LLM model (default: google/gemini-flash-2.0)
 
 4. **OAuth configuration (for Instagram Business Login):**
-   - `INSTAGRAM_CLIENT_ID` - Facebook App ID
-   - `INSTAGRAM_CLIENT_SECRET` - Facebook App Secret
+   - `INSTAGRAM_CLIENT_ID` - Instagram app ID (from Instagram > API setup with Instagram login)
+   - `INSTAGRAM_CLIENT_SECRET` - Instagram app secret
    - `INSTAGRAM_REDIRECT_URI` - OAuth callback URL (default: http://127.0.0.1:5000/auth/instagram/callback)
    
    **Setting up OAuth:**
    1. Create a Facebook App at [Meta for Developers](https://developers.facebook.com/)
-   2. Add Instagram Basic Display API or Instagram Graph API
+   2. Add Instagram and complete **API setup with Instagram login**
    3. Configure OAuth redirect URIs in the app settings
    4. Add the credentials to your `.env` file
    5. Start the dashboard and click "Login with Instagram"
