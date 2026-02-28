@@ -367,6 +367,7 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             'scope': 'instagram_business_basic,instagram_business_manage_comments,pages_show_list,page_read_engagement,ads_read',
             'state': state
         }
+        print("OAuth Params: ", params)
         
         oauth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
         
