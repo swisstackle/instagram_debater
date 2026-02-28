@@ -11,7 +11,7 @@
 
 ### 1.1 What is the Instagram Debate-Bot?
 
-The Instagram Debate-Bot is a lightweight, stateless automation tool that engages with Instagram post commenters by presenting counter-arguments drawn from multiple locally-stored Markdown articles. The bot monitors comments on designated Instagram posts, identifies claims or statements that can be debated, determines which article is most relevant, and responds with arguments from the selected article. Articles can be numbered (with §X.Y.Z citations) or unnumbered (without citations).
+The Instagram Debate-Bot is a lightweight, stateless automation tool that engages with Instagram post commenters by presenting counter-arguments drawn from multiple locally-stored Markdown articles. The bot monitors comments on designated Instagram posts, identifies claims or statements that can be debated, determines which articles are relevant, merges their content into a single combined context, and responds with arguments sourced from all matching articles. Articles can be numbered (with §X.Y.Z citations) or unnumbered (without citations).
 
 ### 1.2 Purpose
 
@@ -20,7 +20,7 @@ This tool is designed to:
 - **Engage:** Foster meaningful debate and discussion in comment sections
 - **Scale:** Automate the process of responding to common misconceptions or opposing viewpoints
 - **Maintain Quality:** Ensure all responses are grounded in vetted knowledge sources
-- **Support Multiple Topics:** Select the most relevant article per comment from multiple sources
+- **Support Multiple Topics:** Consider all relevant articles per comment from multiple sources, merging their content within the prompt size budget
 
 The bot is intended for accounts that share educational or advocacy content across multiple topics and want to systematically engage with commenters using well-researched arguments.
 
@@ -52,7 +52,7 @@ These constraints are **non-negotiable** and define the architecture:
 1. **NO DATABASE:** The system must not use any persistent database (SQL, NoSQL, or otherwise)
 2. **NO VECTOR STORE:** No embeddings, no semantic search, no vector databases (Pinecone, Chroma, FAISS, etc.)
 3. **FULL ARTICLE FEED:** The entire source article must be fed to the LLM on every run, along with all relevant comment context
-4. **ARTICLE SELECTION:** System selects ONE most relevant article per comment from available sources
+4. **ARTICLE SELECTION:** System selects ALL relevant articles per comment from available sources and merges them into a single combined context within the prompt size budget (primary article always included in full; secondary articles appended if they fit, otherwise summarised as title + summary; articles that cannot fit are excluded with a log message)
 5. **STATELESS OPERATION:** Each run of the bot must be independent and self-contained (except for audit logs)
 6. **FILE-BASED STATE:** Use simple JSON files on disk for tracking comments, pending responses, and audit logs
 
@@ -421,13 +421,16 @@ on every run — no redeploy required to toggle between Auto and Manual modes.
    **3.2 Article Selection (LLM Call):**
    - For each available article, check relevance
    - Prompt LLM: "Is this content (post + comment + context) relevant to [article topic]?"
-   - Select first article that returns YES
+   - Collect **all** articles that return YES
    - If NO articles match → Log to `no_match_log.json`, continue to next comment
-   - If article matches → Proceed to response generation
+   - If one or more articles match → Proceed to response generation
 
    **3.3 Generate Response:**
+   - Build combined article context from all matching articles:
+     - Primary (first) article always included in full (truncated at paragraph boundary if it alone exceeds `max_chars`)
+     - Each additional article appended with a separator if it fits within `max_chars`; otherwise only its title + summary is appended as a brief reference; if even the brief reference exceeds the budget the article is excluded with a log message
    - Build prompt using template (see §8)
-   - Include: Selected article, comment text, thread context
+   - Include: Combined article context, comment text, thread context
    - Call LLM API via OpenRouter
    - Parse response
 
@@ -1066,7 +1069,7 @@ All generated responses must pass these checks before being saved or posted:
 
 **Monthly Review:**
 1. Evaluate bot effectiveness (engagement metrics on Instagram)
-2. Consider expanding to multiple articles
+2. All relevant articles are now considered per comment (multi-article context merging implemented)
 3. Update validation rules based on edge cases
 
 ---
@@ -1133,9 +1136,10 @@ def generate_response(prompt: str, max_tokens: int = 2000) -> str:
 
 **Processing Architecture:**
 1. **Post Topic Check:** Verify post caption matches article topic before processing comments
-2. **Relevance Check:** Lightweight filter to determine if comment is debatable
-3. **Response Generation:** Main debate response with article context
-4. **Validation:** Verify citations and check for hallucinations
+2. **Relevance Check:** Lightweight filter to determine if comment is debatable and which articles are relevant
+3. **Context Merging:** Build combined article context from all relevant articles within the prompt size budget (`build_combined_article_context`)
+4. **Response Generation:** Main debate response using the combined article context
+5. **Validation:** Verify citations (against the primary article) and check for hallucinations
 
 ---
 
