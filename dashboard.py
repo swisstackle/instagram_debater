@@ -536,9 +536,9 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             Dictionary with long-lived token data or None if failed
         """
         try:
-            response = requests.get(
+            response = requests.post(
                 'https://graph.instagram.com/access_token',
-                params={
+                data={
                     'grant_type': 'ig_exchange_token',
                     'client_secret': client_secret,
                     'access_token': short_lived_token
