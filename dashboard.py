@@ -507,14 +507,18 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             
             if response.status_code == 200:
                 data = response.json()
+                logger.info(f"Token exchange response: {data}")
                 # Instagram API returns data wrapped in a 'data' array
                 # Extract and return the first element
                 if 'data' in data and len(data['data']) > 0:
                     return data['data'][0]
                 # Fallback if format is different
                 return data
+            else:
+                logger.error(f"Token exchange failed with status {response.status_code}: {response.text}")
             return None
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.error(f"Token exchange request failed: {e}")
             return None
 
     def exchange_for_long_lived_token(
@@ -543,9 +547,14 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
             )
             
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                logger.info(f"Long-lived token exchange successful: expires_in={data.get('expires_in')}")
+                return data
+            else:
+                logger.error(f"Long-lived token exchange failed with status {response.status_code}: {response.text}")
             return None
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.error(f"Long-lived token exchange request failed: {e}")
             return None
 
     def subscribe_instagram_webhooks(access_token: str) -> bool:
