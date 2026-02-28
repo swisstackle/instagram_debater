@@ -236,6 +236,30 @@ More text here.
         assert result is not None
         assert result["status"] == "approved"
 
+    def test_process_comment_passes_article_link_to_fill_template(
+        self, processor, sample_comment, sample_article, mock_llm_client
+    ):
+        """Test that process_comment passes ARTICLE_LINK to fill_template."""
+        article_link = "https://example.com/my-article"
+
+        processor.process_comment(sample_comment, sample_article, article_link=article_link)
+
+        mock_llm_client.fill_template.assert_called_once()
+        call_kwargs = mock_llm_client.fill_template.call_args[0][1]
+        assert "ARTICLE_LINK" in call_kwargs
+        assert call_kwargs["ARTICLE_LINK"] == article_link
+
+    def test_process_comment_article_link_defaults_to_empty_string(
+        self, processor, sample_comment, sample_article, mock_llm_client
+    ):
+        """Test that process_comment defaults ARTICLE_LINK to empty string when not provided."""
+        processor.process_comment(sample_comment, sample_article)
+
+        mock_llm_client.fill_template.assert_called_once()
+        call_kwargs = mock_llm_client.fill_template.call_args[0][1]
+        assert "ARTICLE_LINK" in call_kwargs
+        assert call_kwargs["ARTICLE_LINK"] == ""
+
     def test_build_thread_context_with_replies(self, processor, mock_instagram_api):
         """Test building thread context with replies."""
         mock_instagram_api.get_comment_replies.return_value = [
@@ -831,6 +855,28 @@ More text here.
                             # Should still call post_approved_responses
                             mock_post.assert_called_once()
 
+    def test_run_single_article_passes_link_to_process_comment(
+        self, processor, sample_article, sample_comment, mock_config
+    ):
+        """Test that run() passes article_link from config to process_comment in single-article mode."""
+        mock_config.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
+        comments = [sample_comment]
+
+        with patch.object(processor, 'load_article', return_value=sample_article):
+            with patch.object(processor, 'load_pending_comments', return_value=comments):
+                with patch.object(processor, 'process_comment', return_value={
+                    "comment_id": "comment_123",
+                    "status": "pending_review"
+                }) as mock_process:
+                    with patch.object(processor, 'save_audit_log'):
+                        with patch.object(processor, 'post_approved_responses'):
+                            with patch.object(processor, 'clear_pending_comments'):
+                                processor.run()
+
+                                mock_process.assert_called_once()
+                                _, call_kwargs = mock_process.call_args
+                                assert call_kwargs.get("article_link") == "https://example.com/test"
+
     def test_run_with_auto_post_enabled(self, processor, sample_article, sample_comment, mock_config, capsys):
         """Test run method with auto-post enabled.
 
@@ -1269,6 +1315,29 @@ More text here.
 
                 assert result is None
                 mock_save.assert_called_once()
+
+    def test_process_comment_multi_article_passes_article_link_to_fill_template(
+        self, processor, sample_comment, mock_llm_client, mock_validator  # pylint: disable=unused-argument
+    ):
+        """Test that process_comment_multi_article passes ARTICLE_LINK to fill_template."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\n## §1. Section\n\n### §1.1 Subsection\n\nFitness content.",
+                "title": "Article 1",
+                "summary": "Fitness content.",
+                "is_numbered": True
+            }
+        ]
+
+        with patch.object(processor, 'select_relevant_articles', return_value=[articles[0]]):
+            processor.process_comment_multi_article(sample_comment, articles)
+
+            mock_llm_client.fill_template.assert_called_once()
+            call_kwargs = mock_llm_client.fill_template.call_args[0][1]
+            assert "ARTICLE_LINK" in call_kwargs
+            assert call_kwargs["ARTICLE_LINK"] == "https://example.com/article1"
 
     def test_run_multi_article(self, processor, sample_comment, mock_config, capsys):
         """Test run method with multiple articles configured."""
