@@ -260,7 +260,8 @@ class CommentProcessor:
         return combined
 
     def process_comment(
-        self, comment: Dict[str, Any], article_text: str, is_numbered: bool = True
+        self, comment: Dict[str, Any], article_text: str, is_numbered: bool = True,
+        article_link: str = ""
     ) -> Optional[Dict[str, Any]]:
         """
         Process a single comment and generate response.
@@ -269,6 +270,7 @@ class CommentProcessor:
             comment: Comment data dictionary
             article_text: Full article text
             is_numbered: Whether the article uses numbered sections (default: True)
+            article_link: URL link to the article (default: "")
 
         Returns:
             Result dictionary with response and metadata, or None if skipped
@@ -307,6 +309,7 @@ class CommentProcessor:
         prompt = self.llm_client.fill_template(template, {
             "TOPIC": metadata["title"],
             "FULL_ARTICLE_TEXT": article_text,
+            "ARTICLE_LINK": article_link,
             "POST_CAPTION": post_caption,
             "USERNAME": comment["username"],
             "COMMENT_TEXT": comment["text"],
@@ -401,6 +404,7 @@ class CommentProcessor:
         prompt = self.llm_client.fill_template(template, {
             "TOPIC": primary_article["title"],
             "FULL_ARTICLE_TEXT": combined_article_text,
+            "ARTICLE_LINK": primary_article.get("link", ""),
             "POST_CAPTION": post_caption,
             "USERNAME": comment["username"],
             "COMMENT_TEXT": comment["text"],
@@ -747,10 +751,11 @@ class CommentProcessor:
                 else:
                     article_text = self.load_article(articles_config[0]["path"])
                     is_numbered = articles_config[0].get("is_numbered", True)
+                    article_link = articles_config[0].get("link", "")
 
                     for comment in comments:
                         print(f"Processing comment {comment.get('comment_id')}...")
-                        result = self.process_comment(comment, article_text, is_numbered=is_numbered)
+                        result = self.process_comment(comment, article_text, is_numbered=is_numbered, article_link=article_link)
 
                         if result:
                             self.save_audit_log(result)

@@ -12,6 +12,9 @@ RULES:
 7. Do NOT invent facts not in the article
 8. End with a question to encourage further discussion
 
+ARTICLE LINK:
+{{ARTICLE_LINK}}
+
 ARTICLE:
 {{FULL_ARTICLE_TEXT}}
 
