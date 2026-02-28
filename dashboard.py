@@ -469,15 +469,16 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         token_extractor = create_token_extractor()
         token_data = token_extractor.get_token()
 
-        # Unsubscribe account-level webhooks before clearing local token
+        # Best-effort unsubscription; do not block logout if API rejects it
         if token_data and token_data.get('access_token'):
             unsubscribed = unsubscribe_instagram_webhooks(
                 token_data['access_token'],
                 user_id=token_data.get('user_id')
             )
             if not unsubscribed:
-                logger.error("GET /auth/instagram/logout - 502 Failed to unsubscribe webhook events")
-                raise HTTPException(status_code=502, detail="Failed to unsubscribe webhook events")
+                logger.warning(
+                    "GET /auth/instagram/logout - 200 Unsubscribe failed; continuing logout"
+                )
 
         token_extractor.clear_token()
         logger.info("GET /auth/instagram/logout - 303 Token cleared, redirecting to dashboard")
