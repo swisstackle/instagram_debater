@@ -413,16 +413,22 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
                 raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
             
             # Step 2: Exchange short-lived token for long-lived token
-            long_lived_data = exchange_for_long_lived_token(
-                short_lived_token=short_lived_data['access_token'],
-                client_secret=config.instagram_client_secret
-            )
+            # TESTING: Commenting out Step 2 exchange - Instagram Business tokens may not need exchange
+            logger.info("TESTING: Skipping long-lived token exchange for Business account")
+            logger.info(f"Using token directly from Step 1 (no expires_in field present)")
+            # long_lived_data = exchange_for_long_lived_token(
+            #     short_lived_token=short_lived_data['access_token'],
+            #     client_secret=config.instagram_client_secret
+            # )
+            # 
+            # if not long_lived_data:
+            #     logger.error("GET /auth/instagram/callback - 400 Failed to get long-lived token")
+            #     raise HTTPException(status_code=400, detail="Failed to get long-lived token")
             
-            if not long_lived_data:
-                logger.error("GET /auth/instagram/callback - 400 Failed to get long-lived token")
-                raise HTTPException(status_code=400, detail="Failed to get long-lived token")
+            # Use the token from Step 1 directly
+            long_lived_data = short_lived_data
             
-            # Step 3: Store long-lived token
+            # Step 3: Store token
             token_extractor = create_token_extractor()
             token_extractor.save_token(
                 access_token=long_lived_data['access_token'],
