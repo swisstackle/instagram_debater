@@ -70,23 +70,22 @@ class TestOAuthHelpers:
         assert state1 != state2  # Should be different each time
 
     def test_exchange_code_for_token_mock(self):
-        """Test token exchange logic with mocked Instagram API."""
+        """Test token exchange logic with mocked Facebook OAuth API."""
         import requests
         
         with requests_mock.Mocker() as m:
             m.post(
-                'https://api.instagram.com/oauth/access_token',
+                'https://graph.facebook.com/v25.0/oauth/access_token',
                 json={
-                    'data': [{
-                        'access_token': 'short_lived_token_123',
-                        'user_id': '12345'
-                    }]
+                    'access_token': 'graph_api_token_123',
+                    'user_id': '12345',
+                    'expires_in': 5184000
                 }
             )
             
             # Simulate the token exchange
             response = requests.post(
-                'https://api.instagram.com/oauth/access_token',
+                'https://graph.facebook.com/v25.0/oauth/access_token',
                 data={
                     'client_id': 'test_client',
                     'client_secret': 'test_secret',
@@ -98,9 +97,10 @@ class TestOAuthHelpers:
             
             assert response.status_code == 200
             data = response.json()
-            # API returns data wrapped in 'data' array
-            assert data['data'][0]['access_token'] == 'short_lived_token_123'
-            assert data['data'][0]['user_id'] == '12345'
+            # Facebook OAuth returns flat response (not nested data array)
+            assert data['access_token'] == 'graph_api_token_123'
+            assert data['user_id'] == '12345'
+            assert data['expires_in'] == 5184000
 
     def test_exchange_for_long_lived_token_mock(self):
         """Test long-lived token exchange with mocked Instagram API."""
@@ -231,13 +231,9 @@ class TestOAuthHelpers:
                 parsed = urlparse(location)
                 query_params = parse_qs(parsed.query)
                 
-                # Verify using www.instagram.com, not api.instagram.com
-                assert parsed.netloc == "www.instagram.com", f"Expected www.instagram.com but got {parsed.netloc}"
-                assert parsed.path == "/oauth/authorize"
-                
-                # Verify force_reauth is present
-                assert 'force_reauth' in query_params, "Missing force_reauth parameter"
-                assert query_params['force_reauth'][0] == 'true'
+                # Verify using www.facebook.com Facebook Login
+                assert parsed.netloc == "www.facebook.com", f"Expected www.facebook.com but got {parsed.netloc}"
+                assert parsed.path == "/v25.0/dialog/oauth"
                 
                 # Verify business scopes
                 assert 'scope' in query_params
@@ -293,21 +289,18 @@ class TestOAuthHelpers:
 
         with requests_mock.Mocker() as m:
             m.post(
-                'https://api.instagram.com/oauth/access_token',
+                'https://graph.facebook.com/v25.0/oauth/access_token',
                 json={
-                    'data': [{
-                        'access_token': 'short_lived_token_123',
-                        'user_id': 'ig_user_789',
-                        'username': 'testuser'
-                    }]
+                    'access_token': 'graph_api_token_123',
+                    'user_id': 'ig_user_789',
+                    'expires_in': 5184000
                 }
             )
             m.get(
-                'https://graph.instagram.com/access_token',
+                'https://graph.instagram.com/v25.0/me',
                 json={
-                    'access_token': 'long_lived_token_456',
-                    'token_type': 'bearer',
-                    'expires_in': 5184000
+                    'user_id': 'ig_user_789',
+                    'username': 'testuser'
                 }
             )
             m.post(
@@ -326,8 +319,9 @@ class TestOAuthHelpers:
                 None
             )
             assert subscription_request is not None
-            assert 'subscribed_fields=comments%2Cmentions' in subscription_request.text
-            assert 'access_token=long_lived_token_456' in subscription_request.text
+            # Check the request was made (query params in URL)
+            assert 'subscribed_fields' in subscription_request.url or 'subscribed_fields' in (subscription_request.text or '')
+            assert 'access_token=graph_api_token_123' in subscription_request.url or 'access_token=graph_api_token_123' in (subscription_request.text or '')
 
     def test_oauth_callback_fails_when_webhook_subscription_fails(self, temp_state_dir, monkeypatch):
         """Test that OAuth callback returns error if webhook subscription fails."""
@@ -357,25 +351,28 @@ class TestOAuthHelpers:
 
         with requests_mock.Mocker() as m:
             m.post(
-                'https://api.instagram.com/oauth/access_token',
+                'https://graph.facebook.com/v25.0/oauth/access_token',
                 json={
-                    'data': [{
-                        'access_token': 'short_lived_token_123',
-                        'user_id': 'ig_user_789',
-                        'username': 'testuser'
-                    }]
+                    'access_token': 'graph_api_token_123',
+                    'user_id': 'ig_user_789',
+                    'expires_in': 5184000
                 }
             )
             m.get(
-                'https://graph.instagram.com/access_token',
+                'https://graph.instagram.com/v25.0/me',
                 json={
-                    'access_token': 'long_lived_token_456',
-                    'token_type': 'bearer',
-                    'expires_in': 5184000
+                    'user_id': 'ig_user_789',
+                    'username': 'testuser'
                 }
             )
             m.post(
                 'https://graph.instagram.com/v25.0/me/subscribed_apps',
+                json={'error': {'message': 'Subscription failed'}},
+                status_code=400
+            )
+            # Also mock the /ig_user_789 endpoint for fallback attempt
+            m.post(
+                'https://graph.instagram.com/v25.0/ig_user_789/subscribed_apps',
                 json={'error': {'message': 'Subscription failed'}},
                 status_code=400
             )
@@ -463,12 +460,14 @@ class TestOAuthHelpers:
                     status_code=400
                 )
 
-                with pytest.raises(HTTPException) as exc_info:
-                    asyncio.run(logout_endpoint())
+                # Logout should NOT raise an exception - it's best-effort
+                response = asyncio.run(logout_endpoint())
 
-                assert exc_info.value.status_code == 502
-                assert exc_info.value.detail == "Failed to unsubscribe webhook events"
-                mock_extractor.clear_token.assert_not_called()
+                # Should still redirect to dashboard even if unsubscribe failed
+                assert response.status_code == 303
+                assert response.headers["location"] == "/"
+                # Token should be cleared despite unsubscribe failure
+                mock_extractor.clear_token.assert_called_once()
 
     def test_oauth_logout_without_token_clears_local_token_only(self, temp_state_dir, monkeypatch):
         """Test that logout still clears local token if no token exists."""

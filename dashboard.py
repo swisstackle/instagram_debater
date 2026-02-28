@@ -342,9 +342,9 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
     @app.get("/auth/instagram/login")
     async def instagram_oauth_login():
         """
-        Initiate Instagram OAuth flow for Business accounts.
-        Redirects user to Instagram authorization page with business scopes.
-        Uses www.instagram.com endpoint as per Facebook documentation.
+        Initiate Facebook OAuth flow for Instagram Business accounts.
+        Redirects user to Facebook authorization page with business scopes.
+        Uses Facebook Login endpoint which returns proper Graph API tokens.
         """
         logger.info("GET /auth/instagram/login")
         import time
@@ -357,20 +357,19 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         oauth_states[state] = time.time()
         
         # Build OAuth URL with business scopes
-        # Using www.instagram.com endpoint for Instagram Business/Graph API
+        # Using Facebook Login for Instagram Business API token generation
         print("Redirect URL: ", config.instagram_redirect_uri)
         params = {
-            'force_reauth': 'true',  # String 'true' required by Instagram OAuth API
             'client_id': config.instagram_client_id,
             'redirect_uri': config.instagram_redirect_uri,
             'response_type': 'code',
-            # Instagram Login supports instagram_business_* scopes only.
+            # Instagram Business API scopes
             'scope': 'instagram_business_basic,instagram_business_manage_comments',
             'state': state
         }
         print("OAuth Params: ", params)
         
-        oauth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
+        oauth_url = f"https://www.facebook.com/v25.0/dialog/oauth?{urlencode(params)}"
         
         logger.info("GET /auth/instagram/login - 307 Redirecting to Instagram OAuth")
         return RedirectResponse(url=oauth_url, status_code=307)
@@ -528,20 +527,21 @@ def create_dashboard_app(state_dir: str = "state", audit_log_extractor: AuditLog
         redirect_uri: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Exchange authorization code for short-lived access token.
+        Exchange authorization code for access token via Facebook OAuth.
+        Facebook OAuth returns Graph API tokens valid for Instagram Business API.
         
         Args:
-            code: Authorization code from Instagram
-            client_id: Instagram client ID
-            client_secret: Instagram client secret
+            code: Authorization code from Facebook
+            client_id: Instagram app ID
+            client_secret: Instagram app secret
             redirect_uri: Registered redirect URI
             
         Returns:
-            Dictionary with token data (access_token, user_id, permissions) or None if failed
+            Dictionary with token data (access_token, user_id, expires_in) or None if failed
         """
         try:
             response = requests.post(
-                'https://api.instagram.com/oauth/access_token',
+                'https://graph.facebook.com/v25.0/oauth/access_token',
                 data={
                     'client_id': client_id,
                     'client_secret': client_secret,

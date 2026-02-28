@@ -509,7 +509,7 @@ To support multiple accounts simultaneously, you would need:
 ## API Endpoints Used
 
 1. **Authorization**: `https://www.instagram.com/oauth/authorize` (Business/Graph API endpoint)
-2. **Token Exchange**: `https://api.instagram.com/oauth/access_token`
+2. **Token Exchange**: `https://graph.facebook.com/v25.0/oauth/access_token`
 3. **Long-Lived Token**: `https://graph.instagram.com/access_token?grant_type=ig_exchange_token`
 4. **Token Refresh**: `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token`
 
