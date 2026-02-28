@@ -1004,6 +1004,229 @@ More text here.
         assert selected is not None
         assert selected["title"] == "Article 1"
 
+    def test_select_relevant_articles_returns_all_matches(self, processor, sample_comment, mock_llm_client):
+        """Test that select_relevant_articles returns ALL matching articles, not just the first."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent 1.",
+                "title": "Article 1",
+                "summary": "Content 1."
+            },
+            {
+                "path": "articles/article2.md",
+                "link": "https://example.com/article2",
+                "content": "# Article 2\n\nContent 2.",
+                "title": "Article 2",
+                "summary": "Content 2."
+            },
+            {
+                "path": "articles/article3.md",
+                "link": "https://example.com/article3",
+                "content": "# Article 3\n\nContent 3.",
+                "title": "Article 3",
+                "summary": "Content 3."
+            }
+        ]
+
+        # All articles match
+        mock_llm_client.check_topic_relevance.return_value = True
+
+        selected = processor.select_relevant_articles(
+            articles,
+            "Post caption",
+            sample_comment["text"],
+            ""
+        )
+
+        assert len(selected) == 3
+        assert selected[0]["title"] == "Article 1"
+        assert selected[1]["title"] == "Article 2"
+        assert selected[2]["title"] == "Article 3"
+
+    def test_select_relevant_articles_partial_match(self, processor, sample_comment, mock_llm_client):
+        """Test that select_relevant_articles returns only matching articles."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nFitness content.",
+                "title": "Article 1",
+                "summary": "Fitness content."
+            },
+            {
+                "path": "articles/article2.md",
+                "link": "https://example.com/article2",
+                "content": "# Article 2\n\nNutrition content.",
+                "title": "Article 2",
+                "summary": "Nutrition content."
+            },
+            {
+                "path": "articles/article3.md",
+                "link": "https://example.com/article3",
+                "content": "# Article 3\n\nFitness content again.",
+                "title": "Article 3",
+                "summary": "Fitness content again."
+            }
+        ]
+
+        # Only first and third match
+        mock_llm_client.check_topic_relevance.side_effect = [True, False, True]
+
+        selected = processor.select_relevant_articles(
+            articles,
+            "Post about fitness",
+            sample_comment["text"],
+            ""
+        )
+
+        assert len(selected) == 2
+        assert selected[0]["title"] == "Article 1"
+        assert selected[1]["title"] == "Article 3"
+
+    def test_select_relevant_articles_no_match(self, processor, sample_comment, mock_llm_client):
+        """Test that select_relevant_articles returns empty list when no articles match."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\nContent.",
+                "title": "Article 1",
+                "summary": "Content."
+            }
+        ]
+
+        mock_llm_client.check_topic_relevance.return_value = False
+
+        selected = processor.select_relevant_articles(
+            articles,
+            "Post caption",
+            sample_comment["text"],
+            ""
+        )
+
+        assert selected == []
+
+    def test_build_combined_article_context_single_article(self, processor):
+        """Test that build_combined_article_context returns content of a single article."""
+        articles = [
+            {
+                "content": "# Article 1\n\n## §1. Introduction\n\nFitness content.",
+                "title": "Article 1",
+                "summary": "Fitness content.",
+                "is_numbered": True
+            }
+        ]
+
+        combined = processor.build_combined_article_context(articles)
+
+        assert "# Article 1" in combined
+        assert "Fitness content." in combined
+
+    def test_build_combined_article_context_multiple_articles(self, processor):
+        """Test that build_combined_article_context combines multiple articles."""
+        articles = [
+            {
+                "content": "# Article 1\n\n## §1. Introduction\n\nContent of article 1.",
+                "title": "Article 1",
+                "summary": "Content of article 1.",
+                "is_numbered": True
+            },
+            {
+                "content": "# Article 2\n\n## §1. Introduction\n\nContent of article 2.",
+                "title": "Article 2",
+                "summary": "Content of article 2.",
+                "is_numbered": True
+            }
+        ]
+
+        combined = processor.build_combined_article_context(articles)
+
+        assert "Article 1" in combined
+        assert "Article 2" in combined
+
+    def test_build_combined_article_context_respects_max_chars(self, processor):
+        """Test that build_combined_article_context respects the max_chars limit."""
+        long_content = "# Article\n\n" + "x" * 5000
+        articles = [
+            {"content": long_content, "title": "Article 1", "summary": "Summary.", "is_numbered": True},
+            {"content": long_content, "title": "Article 2", "summary": "Summary.", "is_numbered": True},
+            {"content": long_content, "title": "Article 3", "summary": "Summary.", "is_numbered": True},
+        ]
+
+        max_chars = 6000
+        combined = processor.build_combined_article_context(articles, max_chars=max_chars)
+
+        assert len(combined) <= max_chars
+
+    def test_build_combined_article_context_always_includes_first_article(self, processor):
+        """Test that build_combined_article_context always includes the first article fully."""
+        first_content = "# Primary Article\n\n## §1. Key Section\n\nImportant content here."
+        second_content = "# Secondary Article\n\nContent that may be truncated."
+        articles = [
+            {"content": first_content, "title": "Primary Article", "summary": "Important.", "is_numbered": True},
+            {"content": second_content, "title": "Secondary Article", "summary": "Content.", "is_numbered": True},
+        ]
+
+        # Set max_chars just large enough for first article but tight for second
+        max_chars = len(first_content) + 50
+        combined = processor.build_combined_article_context(articles, max_chars=max_chars)
+
+        # Primary article content must be present
+        assert "Primary Article" in combined
+        assert "Important content here." in combined
+
+    def test_build_combined_article_context_logs_excluded_articles(self, processor, capsys):
+        """Test that build_combined_article_context logs a message when an article is excluded."""
+        first_content = "# Primary\n\nShort primary."
+        second_content = "# Secondary\n\nLong secondary content."
+        articles = [
+            {"content": first_content, "title": "Primary", "summary": "Short.", "is_numbered": True},
+            {"content": second_content, "title": "Secondary", "summary": "x" * 1000, "is_numbered": True},
+        ]
+
+        # max_chars is too small to fit even the brief reference
+        max_chars = len(first_content) + 5
+        processor.build_combined_article_context(articles, max_chars=max_chars)
+
+        captured = capsys.readouterr()
+        assert "Secondary" in captured.out
+        assert "excluded" in captured.out
+
+    def test_process_comment_multi_article_uses_all_relevant_articles(
+        self, processor, sample_comment, mock_llm_client, mock_validator  # pylint: disable=unused-argument
+    ):
+        """Test that process_comment_multi_article uses all relevant articles, not just the first."""
+        articles = [
+            {
+                "path": "articles/article1.md",
+                "link": "https://example.com/article1",
+                "content": "# Article 1\n\n## §1. Section\n\n### §1.1 Subsection\n\nFitness content.",
+                "title": "Article 1",
+                "summary": "Fitness content.",
+                "is_numbered": True
+            },
+            {
+                "path": "articles/article2.md",
+                "link": "https://example.com/article2",
+                "content": "# Article 2\n\n## §1. Section\n\n### §1.1 Subsection\n\nMore fitness content.",
+                "title": "Article 2",
+                "summary": "More fitness content.",
+                "is_numbered": True
+            }
+        ]
+
+        all_relevant = [articles[0], articles[1]]
+
+        with patch.object(processor, 'select_relevant_articles', return_value=all_relevant) as mock_select:
+            with patch.object(processor, 'build_combined_article_context', return_value="Combined content") as mock_build:
+                result = processor.process_comment_multi_article(sample_comment, articles)
+
+                mock_select.assert_called_once()
+                mock_build.assert_called_once_with(all_relevant)
+                assert result is not None
+
     def test_process_comment_multi_article_with_selection(self, processor, sample_comment, mock_llm_client, mock_validator):  # pylint: disable=unused-argument
         """Test processing comment with multiple articles and article selection."""
         # Note: Article content includes §1.1 subsection to match the citation
@@ -1018,8 +1241,8 @@ More text here.
             }
         ]
 
-        # Mock article selection to return the article
-        with patch.object(processor, 'select_relevant_article', return_value=articles[0]):
+        # Mock article selection to return the article (as a list)
+        with patch.object(processor, 'select_relevant_articles', return_value=[articles[0]]):
             result = processor.process_comment_multi_article(sample_comment, articles)
 
             assert result is not None
@@ -1039,8 +1262,8 @@ More text here.
             }
         ]
 
-        # Mock article selection to return None
-        with patch.object(processor, 'select_relevant_article', return_value=None):
+        # Mock article selection to return empty list
+        with patch.object(processor, 'select_relevant_articles', return_value=[]):
             with patch.object(processor, 'save_no_match_log') as mock_save:
                 result = processor.process_comment_multi_article(sample_comment, articles)
 
