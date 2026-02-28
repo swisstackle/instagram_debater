@@ -26,7 +26,9 @@ def create_prompt_extractor(state_dir: str = "state") -> PromptExtractor:
     storage_type = os.getenv('PROMPT_STORAGE_TYPE', 'local').lower()
 
     if storage_type == 'tigris':
+        print("Using TigrisPromptExtractor for runtime-editable templates.")
         return TigrisPromptExtractor()
     else:
         # Default to local disk storage
+        print("Using LocalDiskPromptExtractor for static templates.")
         return LocalDiskPromptExtractor(state_dir=state_dir)

@@ -41,6 +41,7 @@ class LLMClient:
         if prompt_extractor is None:
             from src.prompt_extractor_factory import create_prompt_extractor
             prompt_extractor = create_prompt_extractor()
+            print("No prompt extractor provided, created using factory based on configuration.")
         self.prompt_extractor = prompt_extractor
 
     def generate_response(self, prompt: str) -> str:
