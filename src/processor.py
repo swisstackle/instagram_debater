@@ -391,6 +391,8 @@ class CommentProcessor:
             if thread_context else ""
         )
 
+        print(f"Compressed history used: {compressed_history}")
+
         # Select ALL relevant articles
         relevant_articles = self.select_relevant_articles(
             articles,
