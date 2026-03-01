@@ -176,20 +176,27 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
     print("Received webhook POST request")
     if _webhook_receiver is None:
         raise HTTPException(status_code=500, detail="Webhook receiver not initialized")
-
+    print("Webhook receiver instance is available, processing request")
     # Get request body
     body = await request.body()
     payload = await request.json()
-
+    print(f"Webhook payload: {payload}")
     # Verify signature for security
     signature = request.headers.get("X-Hub-Signature-256")
+    print(f"Received signature: {signature}")
     if signature:
         from src.instagram_api import InstagramAPI  # pylint: disable=import-outside-toplevel
         api = InstagramAPI(access_token="", app_secret=_webhook_receiver.app_secret)
+        print("Verifying webhook signature")
         if not api.verify_webhook_signature(body, signature):
+            print("Invalid signature, rejecting webhook")
             raise HTTPException(status_code=403, detail="Invalid signature")
+        
 
     # Process webhook payload
+    print("Got to processing webhook payload")
     _webhook_receiver.process_webhook_payload(payload)
+    print("Finished processing webhook payload")
+
 
     return {"status": "ok"}
