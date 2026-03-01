@@ -2,7 +2,7 @@
 Tigris/S3-compatible implementation of comment extractor.
 """
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from botocore.exceptions import ClientError
 
@@ -13,8 +13,21 @@ from src.base_json_extractor import BaseTigrisExtractor
 class TigrisExtractor(BaseTigrisExtractor, CommentExtractor):
     """Comment extractor that uses Tigris/S3-compatible object storage."""
 
+    def __init__(self, account_id: Optional[str] = None, **kwargs):
+        """
+        Initialize the Tigris comment extractor.
+
+        Args:
+            account_id: Optional Instagram account ID for per-account namespacing.
+            **kwargs: Additional keyword arguments passed to BaseTigrisExtractor.
+        """
+        super().__init__(**kwargs)
+        self.account_id = account_id
+
     def _get_object_key(self) -> str:
         """Get the S3 object key for comment storage."""
+        if self.account_id:
+            return f"state/accounts/{self.account_id}/pending_comments.json"
         return "state/pending_comments.json"
 
     def load_pending_comments(self) -> List[Dict[str, Any]]:

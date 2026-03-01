@@ -6,6 +6,8 @@ allowing all distributed components (dashboard, processor, webhook) to share
 the same mode setting.
 Default object key: state/mode.json
 """
+from typing import Optional
+
 from src.mode_extractor import ModeExtractor
 from src.base_json_extractor import BaseTigrisExtractor
 
@@ -18,8 +20,21 @@ class TigrisModeExtractor(BaseTigrisExtractor, ModeExtractor):
     Default object key: state/mode.json
     """
 
+    def __init__(self, account_id: Optional[str] = None, **kwargs):
+        """
+        Initialize the Tigris mode extractor.
+
+        Args:
+            account_id: Optional Instagram account ID for per-account namespacing.
+            **kwargs: Additional keyword arguments passed to BaseTigrisExtractor.
+        """
+        super().__init__(**kwargs)
+        self.account_id = account_id
+
     def _get_object_key(self) -> str:
         """Get the S3 object key for mode storage."""
+        if self.account_id:
+            return f"state/accounts/{self.account_id}/mode.json"
         return "state/mode.json"
 
     def get_auto_mode(self) -> bool:
