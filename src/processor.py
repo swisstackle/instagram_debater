@@ -324,6 +324,7 @@ class CommentProcessor:
                 if compressed_history else ""
             )
         })
+        print(f"Compressed History Used: {compressed_history}")
 
         response_text = self.llm_client.generate_response(prompt)
 
