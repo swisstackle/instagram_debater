@@ -1903,3 +1903,166 @@ class TestCommentProcessorArticleExtractor:
         captured = capsys.readouterr()
         assert "No articles configured" in captured.out
         mock_clear.assert_not_called()
+
+
+class TestCompressedConversationHistory:
+    """Tests for compressed conversation history feature in CommentProcessor."""
+
+    @pytest.fixture
+    def mock_instagram_api(self):
+        mock_api = Mock()
+        mock_api.get_post_caption.return_value = "Test post caption"
+        mock_api.get_comment_replies.return_value = []
+        mock_api.post_reply.return_value = {"id": "reply_123"}
+        return mock_api
+
+    @pytest.fixture
+    def mock_llm_client(self):
+        mock_llm = Mock()
+        mock_llm.check_post_topic_relevance.return_value = True
+        mock_llm.check_comment_relevance.return_value = True
+        mock_llm.check_topic_relevance.return_value = True
+        mock_llm.load_template.return_value = "Template with {{COMPRESSED_HISTORY}}"
+        mock_llm.fill_template.return_value = "Filled template"
+        mock_llm.generate_response.return_value = "Generated response with §1.1 citation"
+        mock_llm.compress_conversation_history.return_value = ""
+        return mock_llm
+
+    @pytest.fixture
+    def mock_config(self):
+        mock_cfg = Mock()
+        mock_cfg.auto_post_enabled = False
+        mock_cfg.articles_config = [{"path": "articles/test.md", "link": "https://example.com/test"}]
+        return mock_cfg
+
+    @pytest.fixture
+    def processor(self, mock_instagram_api, mock_llm_client, mock_config):
+        from src.processor import CommentProcessor
+        return CommentProcessor(mock_instagram_api, mock_llm_client, None, mock_config)
+
+    @pytest.fixture
+    def sample_article(self):
+        return """# Test Article
+
+## §1. Introduction
+
+### §1.1 Overview
+
+This is a test article about fitness.
+"""
+
+    @pytest.fixture
+    def sample_comment(self):
+        return {
+            "comment_id": "comment_123",
+            "post_id": "post_456",
+            "username": "testuser",
+            "text": "What do you think about this topic?"
+        }
+
+    def test_process_comment_calls_compress_when_thread_context_exists(
+        self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client
+    ):
+        """process_comment calls compress_conversation_history when there are replies."""
+        mock_instagram_api.get_comment_replies.return_value = [
+            {"from": {"username": "user1"}, "text": "Argument A"},
+            {"from": {"username": "user2"}, "text": "Counter argument B"},
+        ]
+        mock_llm_client.compress_conversation_history.return_value = (
+            "Pro: Argument A\nCon: Counter argument B"
+        )
+
+        processor.process_comment(sample_comment, sample_article)
+
+        mock_llm_client.compress_conversation_history.assert_called_once()
+
+    def test_process_comment_does_not_call_compress_when_no_thread_context(
+        self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client
+    ):
+        """process_comment does not call compress_conversation_history when no replies."""
+        mock_instagram_api.get_comment_replies.return_value = []
+
+        processor.process_comment(sample_comment, sample_article)
+
+        mock_llm_client.compress_conversation_history.assert_not_called()
+
+    def test_process_comment_passes_compressed_history_to_fill_template(
+        self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client
+    ):
+        """process_comment passes COMPRESSED_HISTORY variable to fill_template."""
+        mock_instagram_api.get_comment_replies.return_value = [
+            {"from": {"username": "user1"}, "text": "Argument A"},
+        ]
+        compressed = "Pro: Argument A"
+        mock_llm_client.compress_conversation_history.return_value = compressed
+
+        processor.process_comment(sample_comment, sample_article)
+
+        mock_llm_client.fill_template.assert_called_once()
+        call_kwargs = mock_llm_client.fill_template.call_args[0][1]
+        assert "COMPRESSED_HISTORY" in call_kwargs
+        assert compressed in call_kwargs["COMPRESSED_HISTORY"]
+
+    def test_process_comment_compressed_history_empty_when_no_thread_context(
+        self, processor, sample_comment, sample_article, mock_instagram_api, mock_llm_client
+    ):
+        """process_comment passes empty COMPRESSED_HISTORY when there are no replies."""
+        mock_instagram_api.get_comment_replies.return_value = []
+
+        processor.process_comment(sample_comment, sample_article)
+
+        call_kwargs = mock_llm_client.fill_template.call_args[0][1]
+        assert "COMPRESSED_HISTORY" in call_kwargs
+        assert call_kwargs["COMPRESSED_HISTORY"] == ""
+
+    def test_process_comment_multi_article_calls_compress_when_thread_context_exists(
+        self, processor, sample_comment, mock_instagram_api, mock_llm_client
+    ):
+        """process_comment_multi_article calls compress_conversation_history when there are replies."""
+        mock_instagram_api.get_comment_replies.return_value = [
+            {"from": {"username": "user1"}, "text": "Argument A"},
+        ]
+        compressed = "Pro: Argument A"
+        mock_llm_client.compress_conversation_history.return_value = compressed
+
+        articles = [
+            {
+                "path": "articles/test.md",
+                "link": "https://example.com/test",
+                "content": "# Test\n\n## §1. Intro\n\nContent.",
+                "title": "Test",
+                "summary": "Content.",
+                "is_numbered": True,
+            }
+        ]
+
+        processor.process_comment_multi_article(sample_comment, articles)
+
+        mock_llm_client.compress_conversation_history.assert_called_once()
+
+    def test_process_comment_multi_article_passes_compressed_history_to_fill_template(
+        self, processor, sample_comment, mock_instagram_api, mock_llm_client
+    ):
+        """process_comment_multi_article passes COMPRESSED_HISTORY to fill_template."""
+        mock_instagram_api.get_comment_replies.return_value = [
+            {"from": {"username": "user1"}, "text": "Argument A"},
+        ]
+        compressed = "Pro: Argument A"
+        mock_llm_client.compress_conversation_history.return_value = compressed
+
+        articles = [
+            {
+                "path": "articles/test.md",
+                "link": "https://example.com/test",
+                "content": "# Test\n\n## §1. Intro\n\nContent.",
+                "title": "Test",
+                "summary": "Content.",
+                "is_numbered": True,
+            }
+        ]
+
+        processor.process_comment_multi_article(sample_comment, articles)
+
+        call_kwargs = mock_llm_client.fill_template.call_args[0][1]
+        assert "COMPRESSED_HISTORY" in call_kwargs
+        assert compressed in call_kwargs["COMPRESSED_HISTORY"]

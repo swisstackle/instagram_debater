@@ -217,3 +217,59 @@ class TestProcessorPromptExtractorIntegration:
         )
         # The llm_client.prompt_extractor should be set to the provided extractor
         assert mock_llm.prompt_extractor == prompt_extractor
+
+
+class TestCompressConversationHistory:
+    """Test suite for LLMClient.compress_conversation_history."""
+
+    @pytest.fixture
+    def mock_extractor(self):
+        extractor = MagicMock()
+        extractor.get_prompt.return_value = ""
+        return extractor
+
+    @pytest.fixture
+    def llm_client(self, mock_extractor):
+        from src.llm_client import LLMClient
+        return LLMClient(
+            api_key="test_key",
+            model_name="test-model",
+            prompt_extractor=mock_extractor,
+        )
+
+    def test_compress_conversation_history_returns_empty_when_no_context(self, llm_client):
+        """compress_conversation_history returns empty string for empty thread context."""
+        result = llm_client.compress_conversation_history("")
+        assert result == ""
+
+    def test_compress_conversation_history_calls_llm_with_template(self, llm_client, mock_extractor):
+        """compress_conversation_history loads template and calls LLM with thread context."""
+        template_content = "Compress this: {{THREAD_CONTEXT}}"
+        mock_extractor.get_prompt.return_value = ""
+        with patch("builtins.open", mock_open(read_data=template_content)):
+            with patch.object(llm_client, "generate_response", return_value="- Arg A\n- Arg B") as mock_gen:
+                result = llm_client.compress_conversation_history("@user1: some debate text")
+        assert result == "- Arg A\n- Arg B"
+        mock_gen.assert_called_once()
+
+    def test_compress_conversation_history_uses_compress_history_template(self, llm_client, mock_extractor):
+        """compress_conversation_history loads the compress_history_prompt template."""
+        mock_extractor.get_prompt.return_value = ""
+        with patch("builtins.open", mock_open(read_data="Compress: {{THREAD_CONTEXT}}")) as mock_file:
+            with patch.object(llm_client, "generate_response", return_value="compressed"):
+                llm_client.compress_conversation_history("some context")
+        # Verify the file opened is the compress_history_prompt template
+        opened_path = mock_file.call_args[0][0]
+        assert "compress_history_prompt" in opened_path
+
+    def test_compress_conversation_history_uses_stored_prompt_if_available(
+        self, llm_client, mock_extractor
+    ):
+        """compress_conversation_history uses stored prompt from extractor when available."""
+        mock_extractor.get_prompt.return_value = "Stored compress prompt: {{THREAD_CONTEXT}}"
+        with patch.object(llm_client, "generate_response", return_value="stored result") as mock_gen:
+            result = llm_client.compress_conversation_history("@user1: hello")
+        assert result == "stored result"
+        mock_gen.assert_called_once()
+        # Ensure the stored prompt was used (extractor was consulted)
+        mock_extractor.get_prompt.assert_called_with("compress_history_prompt")

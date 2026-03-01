@@ -302,6 +302,12 @@ class CommentProcessor:
             comment["post_id"]
         )
 
+        # Compress conversation history if thread context exists
+        compressed_history = (
+            self.llm_client.compress_conversation_history(thread_context)
+            if thread_context else ""
+        )
+
         # Generate response using LLM
         # Choose template based on whether article is numbered
         template_name = "debate_prompt.txt" if is_numbered else "debate_prompt_unnumbered.txt"
@@ -313,9 +319,9 @@ class CommentProcessor:
             "POST_CAPTION": post_caption,
             "USERNAME": comment["username"],
             "COMMENT_TEXT": comment["text"],
-            "THREAD_CONTEXT": (
-                f"\nPREVIOUS DISCUSSION IN THIS THREAD:\n{thread_context}"
-                if thread_context else ""
+            "COMPRESSED_HISTORY": (
+                f"\nPREVIOUS ARGUMENTS IN THIS THREAD:\n{compressed_history}"
+                if compressed_history else ""
             )
         })
 
@@ -378,6 +384,12 @@ class CommentProcessor:
             comment["post_id"]
         )
 
+        # Compress conversation history if thread context exists
+        compressed_history = (
+            self.llm_client.compress_conversation_history(thread_context)
+            if thread_context else ""
+        )
+
         # Select ALL relevant articles
         relevant_articles = self.select_relevant_articles(
             articles,
@@ -408,9 +420,9 @@ class CommentProcessor:
             "POST_CAPTION": post_caption,
             "USERNAME": comment["username"],
             "COMMENT_TEXT": comment["text"],
-            "THREAD_CONTEXT": (
-                f"\nPREVIOUS DISCUSSION IN THIS THREAD:\n{thread_context}"
-                if thread_context else ""
+            "COMPRESSED_HISTORY": (
+                f"\nPREVIOUS ARGUMENTS IN THIS THREAD:\n{compressed_history}"
+                if compressed_history else ""
             )
         })
 
