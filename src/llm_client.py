@@ -170,6 +170,23 @@ class LLMClient:
             return True
         return False
 
+    def compress_conversation_history(self, thread_context: str) -> str:
+        """
+        Compress a conversation thread into a structured summary of arguments.
+
+        Args:
+            thread_context: Raw thread context string (formatted replies)
+
+        Returns:
+            Compressed summary listing pro/con arguments, or empty string if no context
+        """
+        if not thread_context:
+            return ""
+
+        template = self.load_template("compress_history_prompt.txt")
+        prompt = self.fill_template(template, {"THREAD_CONTEXT": thread_context})
+        return self.generate_response(prompt)
+
     def check_topic_relevance(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         article_title: str,
