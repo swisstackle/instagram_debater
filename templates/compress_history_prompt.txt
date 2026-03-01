@@ -1,4 +1,4 @@
-You are a debate assistant. Summarize the following Instagram debate thread into a concise list of arguments raised by each side.
+You are a debate assistant. Summarize the following Instagram debate thread by listing the key arguments each participant raised.
 
 THREAD:
 {{THREAD_CONTEXT}}
@@ -6,11 +6,9 @@ THREAD:
 ---
 
 Provide a brief, structured summary in the following format:
-Pro: <argument supporting the article's position>
-Pro: <another argument supporting the article's position>
-Con: <argument opposing the article's position>
-Con: <another argument opposing the article's position>
+@<username>: <argument they raised>
+@<username>: <another argument they raised>
 
-Be concise - one short sentence per argument. Include only distinct arguments, not repetitions. If there are no arguments for a side, omit that side entirely.
+Be concise - one short sentence per argument. Include only distinct arguments, not repetitions. Group entries by username.
 
 SUMMARY:
